@@ -1,0 +1,14 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor settings
+.idea/
+.vscode/
+
+# Local tooling and previews
+.local-backup/
+.repo-sync/
+.tools/
+*.log
