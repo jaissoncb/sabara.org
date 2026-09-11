@@ -1,0 +1,7 @@
+_site/
+apps/futebol/node_modules/
+apps/futebol/dist/
+apps/futebol/coverage/
+**/.env
+**/.env.*
+!**/.env.example
