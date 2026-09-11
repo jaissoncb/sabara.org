@@ -57,8 +57,8 @@ select is(
    from pg_proc as procedures
    join pg_namespace as namespaces on namespaces.oid = procedures.pronamespace
    where namespaces.nspname = 'private' and procedures.prosecdef),
-  7,
-  'somente os sete helpers necessários no schema private são SECURITY DEFINER'
+  8,
+  'somente os oito helpers necessários no schema private são SECURITY DEFINER'
 );
 select ok(
   (select bool_and(pg_get_userbyid(procedures.proowner) = 'postgres')
