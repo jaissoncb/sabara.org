@@ -13,7 +13,7 @@ import {
   type PreferredPosition,
 } from './group-service'
 
-const DrawPanel = lazy(async () => ({ default: (await import('../draw/DrawPanel')).DrawPanel }))
+const MatchWorkspace = lazy(async () => ({ default: (await import('../matches/MatchWorkspace')).MatchWorkspace }))
 
 interface GroupDashboardProps {
   client: FutebolSupabaseClient | null
@@ -49,6 +49,7 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
   const [showGroupForm, setShowGroupForm] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [editingPlayer, setEditingPlayer] = useState<Player | 'new' | null>(null)
+  const [matchAttemptPending, setMatchAttemptPending] = useState(false)
 
   const refresh = useCallback(async (preferredGroupId?: string) => {
     if (!client) {
@@ -111,7 +112,7 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
   )
   const canManagePlayers = selectedGroup?.role === 'owner' || selectedGroup?.role === 'admin'
 
-  if (loading) {
+  if (loading && groups.length === 0) {
     return <section className="workspace-state" aria-live="polite"><span className="spinner" aria-hidden="true" /><p>Carregando seus grupos…</p></section>
   }
 
@@ -134,6 +135,7 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
         <p>Crie um grupo para cadastrar jogadores e deixar tudo pronto para as partidas.</p>
         {showGroupForm ? (
           <GroupForm
+            disabled={matchAttemptPending}
             client={client}
             initialValue={EMPTY_GROUP}
             onCancel={() => setShowGroupForm(false)}
@@ -153,7 +155,7 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
           <p className="eyebrow">Seus grupos</p>
           <h1>Quem joga hoje?</h1>
         </div>
-        <button className="icon-action" type="button" aria-label="Criar outro grupo" onClick={() => setShowGroupForm((visible) => !visible)}>＋</button>
+        <button className="icon-action" type="button" aria-label="Criar outro grupo" disabled={matchAttemptPending} onClick={() => setShowGroupForm((visible) => !visible)}>＋</button>
       </section>
 
       {error ? <p className="form-status" role="status">{error}</p> : null}
@@ -161,6 +163,7 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
       {showGroupForm ? (
         <section className="panel compact-panel" aria-label="Novo grupo">
           <GroupForm
+            disabled={matchAttemptPending}
             client={client}
             initialValue={EMPTY_GROUP}
             onCancel={() => setShowGroupForm(false)}
@@ -173,6 +176,7 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
         {groups.map((group) => (
           <button
             aria-selected={group.id === selectedGroupId}
+            disabled={matchAttemptPending}
             className={group.id === selectedGroupId ? 'group-chip selected' : 'group-chip'}
             key={group.id}
             onClick={() => { setSelectedGroupId(group.id); setEditingPlayer(null); setShowSettings(false) }}
@@ -202,6 +206,7 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
           {showSettings && selectedGroup.role === 'owner' ? (
             <section className="panel compact-panel" aria-label="Ajustes do grupo">
               <GroupForm
+            disabled={matchAttemptPending}
                 client={client}
                 groupId={selectedGroup.id}
                 initialValue={{
@@ -215,11 +220,9 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
             </section>
           ) : null}
 
-          {canManagePlayers ? (
-            <Suspense fallback={<p role="status">Carregando sorteio…</p>}>
-              <DrawPanel key={selectedGroup.id} group={selectedGroup} players={selectedPlayers} />
-            </Suspense>
-          ) : null}
+          <Suspense fallback={<p role="status">Carregando partidas…</p>}>
+            <MatchWorkspace key={selectedGroup.id} client={client} group={selectedGroup} players={selectedPlayers} onAttemptChange={setMatchAttemptPending} />
+          </Suspense>
 
           <section className="players-section">
             <div className="section-title-row">
@@ -275,9 +278,10 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
   )
 }
 
-function GroupForm({ client, groupId, initialValue, onCancel, onSaved }: {
+function GroupForm({ client, groupId, initialValue, onCancel, onSaved, disabled = false }: {
   client: FutebolSupabaseClient | null
   groupId?: string
+  disabled?: boolean
   initialValue: GroupInput
   onCancel: () => void
   onSaved: (groupId?: string) => Promise<void>
@@ -287,6 +291,7 @@ function GroupForm({ client, groupId, initialValue, onCancel, onSaved }: {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (busy || disabled) return
     if (!client) return setError('A conexão com o Supabase não está configurada.')
     setBusy(true)
     setError(null)
@@ -315,7 +320,7 @@ function GroupForm({ client, groupId, initialValue, onCancel, onSaved }: {
         <label>Por time<input name="defaultPlayersOnCourt" defaultValue={initialValue.defaultPlayersOnCourt} type="number" min="1" max="20" required /></label>
       </div>
       {error ? <p className="form-status" role="status">{error}</p> : null}
-      <button className="solid-action" type="submit" disabled={busy}>{busy ? 'Salvando…' : 'Salvar grupo'}</button>
+      <button className="solid-action" type="submit" disabled={busy || disabled}>{busy ? 'Salvando…' : 'Salvar grupo'}</button>
     </form>
   )
 }

@@ -1,12 +1,13 @@
-import { useState, type DragEvent, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react'
 import type { GroupWithRole, Player } from '../groups/group-service'
 import { drawTeams, DrawInputError, type DrawPlayer, type DrawResult } from './engine'
 import { movePlayer, swapCourtStatus, swapPlayers, type AdjustmentState } from './adjustments'
 import { localDateInputValue } from './local-date'
+import type { FutebolSupabaseClient } from '../lib/supabase/client'
+import { buildDrawPayload, TEAM_NAMES, type GameConfig, type SaveDrawPayload } from '../matches/draw-payload'
+import { saveMatchDraw } from '../matches/match-service'
 
-const TEAM_NAMES = ['Azul', 'Vermelho', 'Verde']
 type GameStep = 'details' | 'participants' | 'result'
-interface GameConfig { name: string; matchDate: string; matchTime: string; playersOnCourt: number; teamCount: number }
 
 type SelectedPlayer = { teamIndex: number; id: string } | null
 
@@ -14,8 +15,7 @@ function editableResult(result: DrawResult, playersOnCourt: number): AdjustmentS
   return { playersOnCourt, teams: result.teams.map((team) => ({ playerIds: [...team.playerIds], reserveIds: [...team.reserveIds] })) }
 }
 
-/** Phase 6 retains its game and manual adjustments only in component state. */
-export function GameFlow({ group, players }: { group: GroupWithRole; players: Player[] }) {
+export function GameFlow({ group, players, client = null, onSaved, onAttemptChange }: { group: GroupWithRole; players: Player[]; client?: FutebolSupabaseClient | null; onSaved?: (id: string) => void; onAttemptChange?: (pending: boolean) => void }) {
   const [step, setStep] = useState<GameStep>('details')
   const [config, setConfig] = useState<GameConfig>({ name: '', matchDate: localDateInputValue(), matchTime: '', playersOnCourt: group.default_players_on_court, teamCount: 2 })
   const [selected, setSelected] = useState<string[]>([])
@@ -23,28 +23,82 @@ export function GameFlow({ group, players }: { group: GroupWithRole; players: Pl
   const [adjustment, setAdjustment] = useState<AdjustmentState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [runs, setRuns] = useState<DrawResult[]>([])
+  const [drawContext, setDrawContext] = useState('')
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'error' | 'saved'>('idle')
+  const attempt = useRef<{ id: string; payload: SaveDrawPayload } | null>(null)
+  const [frozenAttempt, setFrozenAttempt] = useState<{ id: string; payload: SaveDrawPayload } | null>(null)
+  const submitting = useRef(false)
+  useEffect(() => {
+    if (saveState !== 'saving' && saveState !== 'error') return
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [saveState])
   if (group.role !== 'owner' && group.role !== 'admin') return null
   const eligible = players.filter((player) => player.active && player.group_id === group.id)
+  const selectedEligible = selected.filter((id) => eligible.some((p) => p.id === id))
+  const context = JSON.stringify([config, eligible.filter((p) => selected.includes(p.id)).map(toDrawPlayer).sort((a, b) => a.id.localeCompare(b.id))])
+  const stale = result !== null && drawContext !== context
+  const locked = saveState !== 'idle'
+  const resultPlayers: Player[] = frozenAttempt ? frozenAttempt.payload.participants.map((p) => ({
+    id: p.player_id, group_id: group.id, name: p.player_name_snapshot, nickname: p.player_nickname_snapshot,
+    skill_rating: p.skill_rating_snapshot, is_goalkeeper: p.is_goalkeeper_snapshot, preferred_position: p.preferred_position_snapshot,
+    active: true, created_at: '', updated_at: '',
+  })) : eligible
 
-  function beginGame(next: GameConfig) { setConfig(next); setError(null); setResult(null); setAdjustment(null); setStep('participants') }
+  function invalidate() { setResult(null); setAdjustment(null); setRuns([]); setDrawContext('') }
+  function beginGame(next: GameConfig) { if (JSON.stringify(next) !== JSON.stringify(config)) invalidate(); setConfig(next); setError(null); setStep('participants') }
   function input() { return { players: eligible.filter((p) => selected.includes(p.id)).map(toDrawPlayer), playersOnCourt: config.playersOnCourt, teamCount: config.teamCount } }
   async function draw(isReroll = false) {
-    if (busy) return
+    if (busy || locked) return
     if (isReroll && adjustment && result && !sameTeams(adjustment, editableResult(result, config.playersOnCourt)) && !window.confirm('Um novo sorteio descartará os ajustes manuais. Continuar?')) return
     setBusy(true); setError(null)
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
     try {
       const next = drawTeams({ ...input(), seed: newSeed() })
       setResult(next); setAdjustment(editableResult(next, config.playersOnCourt))
+      setRuns((previous) => drawContext === context ? [...previous, next] : [next]); setDrawContext(context)
       setStep('result')
     } catch (cause) { setError(cause instanceof DrawInputError ? cause.message : 'Não foi possível sortear os times. Tente novamente.') } finally { setBusy(false) }
   }
+  async function save() {
+    if (!client || !result || !adjustment || submitting.current || saveState === 'saved' || (stale && !attempt.current)) return
+    submitting.current = true; setError(null); setSaveState('saving')
+    try {
+      // Freeze once, before the first network request. A retry uses these exact values.
+      attempt.current ??= { id: crypto.randomUUID(), payload: buildDrawPayload(group.id, config, eligible, runs, adjustment) }
+      setFrozenAttempt(attempt.current)
+      onAttemptChange?.(true)
+      const id = await saveMatchDraw(client, attempt.current.id, attempt.current.payload)
+      setSaveState('saved'); onAttemptChange?.(false); onSaved?.(id)
+    } catch {
+      setSaveState(attempt.current ? 'error' : 'idle')
+      setError(attempt.current ? 'Não foi possível confirmar o salvamento. A partida pode já ter sido salva. Tente novamente com os mesmos dados; não crie outra cópia.' : 'Não foi possível preparar o salvamento. Confira os dados e tente novamente.')
+    } finally { submitting.current = false }
+  }
+  function abandon() {
+    if (!window.confirm('A resposta pode ter sido perdida após o salvamento. Verifique o histórico antes de abandonar: salvar novamente após editar poderá criar outra partida. Abandonar esta tentativa?')) return
+    attempt.current = null; setFrozenAttempt(null); setSaveState('idle'); setError(null)
+    onAttemptChange?.(false)
+    if (stale) { invalidate(); setStep('participants') }
+  }
   return <section className="panel draw-panel" aria-label="Novo jogo">
     <div className="game-flow-heading"><div><p className="eyebrow">Novo jogo</p><h2>{step === 'details' ? 'Configure a partida' : step === 'participants' ? 'Quem vai jogar?' : 'Times sorteados'}</h2></div><p className="game-flow-step" aria-label={`Etapa ${step === 'details' ? 1 : step === 'participants' ? 2 : 3} de 3`}>{step === 'details' ? '1 de 3' : step === 'participants' ? '2 de 3' : '3 de 3'}</p></div>
-    <p className="game-flow-note">O jogo existe apenas nesta tela até o fim desta fase.</p>
+    <p className="game-flow-note">O jogo existe apenas nesta tela até você salvar e aceitar o sorteio.</p>
     {step === 'details' ? <Details initial={config} onContinue={beginGame} /> : null}
-    {step === 'participants' ? <Participants busy={busy} config={config} error={error} players={eligible} selected={selected} onBack={() => { setError(null); setStep('details') }} onDraw={() => void draw()} onSelectedChange={(ids) => { setSelected(ids); setError(null) }} /> : null}
-    {step === 'result' && result && adjustment ? <Results config={config} players={eligible} original={result} state={adjustment} busy={busy} error={error} onChange={setAdjustment} onReroll={() => void draw(true)} onEditGame={() => setStep('details')} onEditParticipants={() => setStep('participants')} /> : null}
+    {step === 'participants' ? <Participants busy={busy} config={config} error={error} players={eligible} selected={selectedEligible} onBack={() => { setError(null); setStep('details') }} onDraw={() => void draw()} onSelectedChange={(ids) => { if (JSON.stringify([...ids].sort()) !== JSON.stringify([...selected].sort())) invalidate(); setSelected(ids); setError(null) }} /> : null}
+    {step === 'result' && stale && !locked ? <div role="status"><p>O elenco ou a configuração mudou. Faça um novo sorteio; os sorteios anteriores serão descartados.</p><button className="quiet-action" onClick={() => { invalidate(); setSelected(selectedEligible); setStep('participants') }}>Revisar participantes</button></div> : null}
+    {step === 'result' && result && adjustment && (!stale || locked) ? <>
+      <fieldset className="result-editing" disabled={busy || locked}>
+        <Results config={config} players={resultPlayers} original={result} state={adjustment} busy={busy} locked={locked} error={null} onChange={(next) => { if (!locked) setAdjustment(next) }} onReroll={() => void draw(true)} onEditGame={() => setStep('details')} onEditParticipants={() => setStep('participants')} />
+      </fieldset>
+      <p>{runs.length} sorteio(s) nesta partida. Somente o último será aceito.</p>
+      {error ? <p className="form-status" role="alert">{error}</p> : null}
+      {saveState === 'saved' ? <p className="adjustment-status" role="status">Partida salva e sorteio aceito. Consulte o resultado final no histórico.</p> : <button className="solid-action" type="button" disabled={!client || busy || saveState === 'saving'} onClick={() => void save()}>{saveState === 'saving' ? 'Salvando e aceitando…' : saveState === 'error' ? 'Tentar salvar novamente' : 'Salvar e aceitar sorteio'}</button>}
+      {saveState === 'error' ? <button className="quiet-action" type="button" onClick={abandon}>Abandonar tentativa e editar</button> : null}
+      {saveState === 'saved' && onSaved && frozenAttempt ? <button className="quiet-action" type="button" onClick={() => onSaved(frozenAttempt.id)}>Ver partida salva</button> : null}
+    </> : null}
   </section>
 }
 
@@ -59,17 +113,17 @@ function Participants({ busy, config, error, players, selected, onBack, onDraw, 
   return <div className="game-participants"><p className="game-summary">{config.teamCount} times · {config.playersOnCourt} em quadra por time</p><div className="draw-actions"><button className="quiet-action" type="button" disabled={busy} onClick={() => onSelectedChange(players.map((p) => p.id))}>Selecionar todos</button><button className="quiet-action" type="button" disabled={busy} onClick={() => onSelectedChange([])}>Limpar seleção</button></div><fieldset className="draw-controls" disabled={busy}><legend>Jogadores ativos</legend>{players.map((p) => <label className="draw-player-option" key={p.id}><input type="checkbox" checked={selected.includes(p.id)} onChange={(event) => toggle(p.id, event.target.checked)} /><span>{p.nickname || p.name} · Nível {Number(p.skill_rating).toFixed(1)}{p.is_goalkeeper ? ' · Goleiro' : ''}</span></label>)}</fieldset><p aria-live="polite">{selected.length} jogadores selecionados</p><p>Todos os selecionados entram em um time. Times incompletos e reservas por time são permitidos.</p>{error ? <p className="form-status" role="alert">{error}</p> : null}<div className="game-flow-actions"><button className="quiet-action" type="button" disabled={busy} onClick={onBack}>Voltar</button><button className="solid-action" type="button" disabled={busy || selected.length < config.teamCount} onClick={onDraw}>{busy ? 'Sorteando…' : 'Sortear times'}</button></div></div>
 }
 
-function Results({ config, players, original, state, busy, error, onChange, onReroll, onEditGame, onEditParticipants }: { config: GameConfig; players: Player[]; original: DrawResult; state: AdjustmentState; busy: boolean; error: string | null; onChange: (state: AdjustmentState) => void; onReroll: () => void; onEditGame: () => void; onEditParticipants: () => void }) {
+function Results({ config, players, original, state, busy, locked, error, onChange, onReroll, onEditGame, onEditParticipants }: { config: GameConfig; players: Player[]; original: DrawResult; state: AdjustmentState; busy: boolean; locked: boolean; error: string | null; onChange: (state: AdjustmentState) => void; onReroll: () => void; onEditGame: () => void; onEditParticipants: () => void }) {
   const [selected, setSelected] = useState<SelectedPlayer>(null)
   const [dragging, setDragging] = useState<SelectedPlayer>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const drawPlayers = new Map(players.map((player) => [player.id, toDrawPlayer(player)]))
   const adjusted = !sameTeams(state, editableResult(original, config.playersOnCourt))
   const currentScore = balanceScore(state, drawPlayers)
-  function apply(action: ReturnType<typeof movePlayer>) { if (action.ok) { onChange(action.state); setSelected(null); setDragging(null); setNotice('Ajuste aplicado. As métricas foram atualizadas.'); return } setNotice(action.message) }
+  function apply(action: ReturnType<typeof movePlayer>) { if (busy || locked) return; if (action.ok) { onChange(action.state); setSelected(null); setDragging(null); setNotice('Ajuste aplicado. As métricas foram atualizadas.'); return } setNotice(action.message) }
   function dropOnTeam(event: DragEvent<HTMLElement>, teamIndex: number) { event.preventDefault(); if (dragging) apply(movePlayer(state, dragging.teamIndex, dragging.id, teamIndex, drawPlayers)); setDragging(null) }
   function dropOnPlayer(event: DragEvent<HTMLElement>, teamIndex: number, playerId: string) { event.preventDefault(); if (dragging && (dragging.teamIndex !== teamIndex || dragging.id !== playerId)) apply(swapPlayers(state, dragging.teamIndex, dragging.id, teamIndex, playerId, drawPlayers)); setDragging(null) }
-  return <section aria-label="Resultado do sorteio" aria-live="polite" className="draw-result"><div className="result-title"><div><h3>{config.name.trim() || 'Jogo sem nome'}</h3><p>{formatDate(config.matchDate)}{config.matchTime ? ` · ${config.matchTime}` : ''} · {config.teamCount} times</p></div><button className="quiet-action" type="button" disabled={busy} onClick={() => { setSelected(null); setDragging(null); onReroll() }}>{busy ? 'Sorteando…' : 'Novo sorteio'}</button></div><p>{adjusted ? `Ajustado manualmente · diferença atual entre médias: ${currentScore.toFixed(2)}. Não houve reotimização automática.` : `Diferença entre médias: ${original.balanceScore.toFixed(2)}. Quanto menor, mais próximos os níveis médios.`}</p><p className="game-flow-note">Arraste um jogador sobre outro para trocar os times. Para teclado, selecione um jogador e use os botões de troca ou de titulares/reservas.</p>{notice ? <p className="adjustment-status" role="status">{notice}</p> : null}{error ? <p className="form-status" role="alert">{error}</p> : null}<div className="draw-teams">{state.teams.map((team, index) => <Team key={TEAM_NAMES[index]} team={team} index={index} players={players} selected={selected} onSelect={setSelected} onDrag={setDragging} onDropTeam={dropOnTeam} onDropPlayer={dropOnPlayer} onApply={apply} state={state} drawPlayers={drawPlayers} />)}</div><p className="game-flow-note">O resultado e os ajustes não foram salvos.</p><div className="game-flow-actions"><button className="quiet-action" type="button" onClick={onEditGame}>Editar jogo</button><button className="solid-action" type="button" onClick={onEditParticipants}>Voltar aos participantes</button></div></section>
+  return <section aria-label="Resultado do sorteio" aria-live="polite" className="draw-result"><div className="result-title"><div><h3>{config.name.trim() || 'Jogo sem nome'}</h3><p>{formatDate(config.matchDate)}{config.matchTime ? ` · ${config.matchTime}` : ''} · {config.teamCount} times</p></div><button className="quiet-action" type="button" disabled={busy} onClick={() => { setSelected(null); setDragging(null); onReroll() }}>{busy ? 'Sorteando…' : 'Novo sorteio'}</button></div><p>{adjusted ? `Ajustado manualmente · diferença atual entre médias: ${currentScore.toFixed(2)}. Não houve reotimização automática.` : `Diferença entre médias: ${original.balanceScore.toFixed(2)}. Quanto menor, mais próximos os níveis médios.`}</p><p className="game-flow-note">Arraste um jogador sobre outro para trocar os times. Para teclado, selecione um jogador e use os botões de troca ou de titulares/reservas.</p>{notice ? <p className="adjustment-status" role="status">{notice}</p> : null}{error ? <p className="form-status" role="alert">{error}</p> : null}<div className="draw-teams">{state.teams.map((team, index) => <Team key={TEAM_NAMES[index]} team={team} index={index} players={players} selected={selected} onSelect={setSelected} onDrag={setDragging} onDropTeam={dropOnTeam} onDropPlayer={dropOnPlayer} onApply={apply} state={state} drawPlayers={drawPlayers} />)}</div><p className="game-flow-note">Confira a escalação final antes de salvar e aceitar.</p><div className="game-flow-actions"><button className="quiet-action" type="button" onClick={onEditGame}>Editar jogo</button><button className="solid-action" type="button" onClick={onEditParticipants}>Voltar aos participantes</button></div></section>
 }
 
 function Team({ team, index, players, selected, onSelect, onDrag, onDropTeam, onDropPlayer, onApply, state, drawPlayers }: { team: AdjustmentState['teams'][number]; index: number; players: Player[]; selected: SelectedPlayer; onSelect: (value: SelectedPlayer) => void; onDrag: (value: SelectedPlayer) => void; onDropTeam: (event: DragEvent<HTMLElement>, index: number) => void; onDropPlayer: (event: DragEvent<HTMLElement>, index: number, id: string) => void; onApply: (result: ReturnType<typeof movePlayer>) => void; state: AdjustmentState; drawPlayers: Map<string, DrawPlayer> }) {

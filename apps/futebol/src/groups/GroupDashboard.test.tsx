@@ -3,6 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { GroupDashboard } from './GroupDashboard'
 import * as service from './group-service'
 import type { FutebolSupabaseClient } from '../lib/supabase/client'
+import * as matches from '../matches/match-service'
+
+vi.mock('../matches/match-service', async (original) => ({
+  ...await original<typeof matches>(), loadMatchHistory: vi.fn(), loadSavedMatch: vi.fn(), saveMatchDraw: vi.fn(),
+}))
 
 vi.mock('./group-service', async (original) => ({
   ...await original<typeof service>(),
@@ -98,4 +103,32 @@ it('mostra carregamento, erro e recupera pela nova tentativa', async () => {
   expect(screen.getByText('Carregando seus grupos…')).toBeInTheDocument()
   await user.click(await screen.findByRole('button', { name: 'Tentar novamente' }))
   expect(await screen.findByText('Ana')).toBeInTheDocument()
+})
+
+it('preserva retry durante recarga do elenco e bloqueia troca de grupo enquanto a resposta é incerta', async () => {
+  const user = userEvent.setup()
+  vi.mocked(service.loadGroupWorkspace).mockResolvedValue({ groups: [group, { ...group, id: 'b', name: 'Outro grupo' }], players: [player, { ...player, id: 'p2', name: 'Bia' }] })
+  vi.mocked(matches.saveMatchDraw).mockRejectedValueOnce(new Error('timeout')).mockImplementation((_client, id) => Promise.resolve(id))
+  vi.mocked(matches.loadMatchHistory).mockResolvedValue([])
+  vi.mocked(matches.loadSavedMatch).mockImplementation(() => new Promise(() => {}))
+  render(<GroupDashboard client={client} userId="user" />)
+  await user.click(await screen.findByRole('button', { name: 'Criar outro grupo' }))
+  await user.click(await screen.findByRole('button', { name: 'Selecionar participantes' }))
+  await user.click(screen.getByRole('button', { name: 'Selecionar todos' }))
+  await user.click(screen.getByRole('button', { name: 'Sortear times' }))
+  await screen.findByRole('region', { name: 'Resultado do sorteio' })
+  await user.click(screen.getByRole('button', { name: 'Salvar e aceitar sorteio' }))
+  await screen.findByRole('alert')
+  const first = vi.mocked(matches.saveMatchDraw).mock.calls[0]!
+  expect(screen.getByRole('tab', { name: 'Outro grupo' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Salvar grupo' })).toBeDisabled()
+  const roster = screen.getByText('2 jogadores ativos').closest('section')!
+  await user.click(within(roster).getAllByRole('button', { name: 'Editar' })[0]!)
+  await user.click(screen.getByRole('button', { name: 'Salvar jogador' }))
+  expect(await screen.findByRole('button', { name: 'Tentar salvar novamente' })).toBeEnabled()
+  await user.click(screen.getByRole('button', { name: 'Tentar salvar novamente' }))
+  await screen.findByText(/Partida salva e sorteio aceito/)
+  expect(screen.getByRole('tab', { name: 'Outro grupo' })).toBeEnabled()
+  expect(vi.mocked(matches.saveMatchDraw).mock.calls[1]![1]).toBe(first[1])
+  expect(vi.mocked(matches.saveMatchDraw).mock.calls[1]![2]).toBe(first[2])
 })

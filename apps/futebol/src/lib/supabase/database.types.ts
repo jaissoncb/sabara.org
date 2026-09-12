@@ -398,6 +398,10 @@ export type Database = {
         }
         Returns: string
       }
+      save_match_draw: {
+        Args: { payload: Json; target_match_id: string }
+        Returns: string
+      }
     }
     Enums: {
       assignment_source: "draw" | "manual"
