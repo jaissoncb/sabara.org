@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { FutebolSupabaseClient } from '../lib/supabase/client'
 import {
   createGroup,
@@ -12,6 +12,8 @@ import {
   type PlayerInput,
   type PreferredPosition,
 } from './group-service'
+
+const DrawPanel = lazy(async () => ({ default: (await import('../draw/DrawPanel')).DrawPanel }))
 
 interface GroupDashboardProps {
   client: FutebolSupabaseClient | null
@@ -211,6 +213,12 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
                 onSaved={async () => { setShowSettings(false); await refresh(selectedGroup.id) }}
               />
             </section>
+          ) : null}
+
+          {canManagePlayers ? (
+            <Suspense fallback={<p role="status">Carregando sorteio…</p>}>
+              <DrawPanel key={selectedGroup.id} group={selectedGroup} players={selectedPlayers} />
+            </Suspense>
           ) : null}
 
           <section className="players-section">
