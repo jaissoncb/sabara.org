@@ -802,3 +802,12 @@ h2 {
 .game-flow-note, .game-summary { color: var(--muted); line-height: 1.45; }
 .game-participants { display: grid; gap: 1rem; }
 .team-warning { border-radius: 0.7rem; padding: 0.65rem; background: #fff6dc; color: #755300; font-weight: 700; }
+.result-title { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.team-roster { margin-top: 1rem; }
+.team-roster h4 { margin: 0 0 0.45rem; color: var(--green-900); font-size: 0.9rem; }
+.team-roster ul { display: grid; margin: 0; padding: 0; gap: 0.55rem; list-style: none; }
+.team-roster li { display: grid; margin: 0; border: 1px solid var(--line); border-radius: 0.7rem; padding: 0.65rem; gap: 0.4rem; background: #fbfdfc; }
+.team-roster li.selected-player { border-color: var(--green-700); background: var(--green-100); }
+.player-adjustments { display: flex; flex-wrap: wrap; gap: 0.65rem; }
+.player-adjustments .quiet-action { min-height: 32px; padding: 0; font-size: 0.82rem; }
+.adjustment-status { margin: 0; border-radius: 0.7rem; padding: 0.65rem; background: var(--green-100); color: var(--green-900); font-weight: 700; }
