@@ -38,13 +38,19 @@ a {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
 a:focus-visible,
 button:focus-visible,
 input:focus-visible {
+  outline: 3px solid #f0b429;
+  outline-offset: 3px;
+}
+
+select:focus-visible {
   outline: 3px solid #f0b429;
   outline-offset: 3px;
 }
@@ -395,6 +401,339 @@ h2 {
   text-decoration: none;
 }
 
+.workspace {
+  display: grid;
+  gap: 16px;
+}
+
+.workspace-heading,
+.section-title-row,
+.form-heading,
+.group-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.workspace-heading h1,
+.empty-workspace h1,
+.workspace-state h1 {
+  max-width: none;
+  color: var(--ink);
+  font-size: clamp(2rem, 9vw, 3.2rem);
+}
+
+.workspace-heading .eyebrow,
+.players-section .eyebrow,
+.empty-workspace .eyebrow {
+  color: var(--green-700);
+}
+
+.icon-action,
+.close-action {
+  display: inline-grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 16px;
+  background: var(--green-800);
+  color: white;
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.close-action {
+  width: 42px;
+  height: 42px;
+  background: #edf3f0;
+  color: var(--green-900);
+}
+
+.group-switcher {
+  display: flex;
+  margin: 0 -16px;
+  padding: 20px 16px 4px;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.group-chip {
+  min-height: 44px;
+  flex: 0 0 auto;
+  border: 1px solid #b9c9c2;
+  border-radius: 999px;
+  padding: 0 17px;
+  background: white;
+  color: var(--green-900);
+  font-weight: 800;
+}
+
+.group-chip.selected {
+  border-color: var(--green-900);
+  background: var(--green-900);
+  color: white;
+}
+
+.panel,
+.empty-workspace,
+.workspace-state,
+.empty-list {
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface);
+}
+
+.group-summary {
+  align-items: flex-end;
+  padding: 22px;
+}
+
+.group-summary h2 {
+  max-width: none;
+  margin-top: 9px;
+  font-size: 1.65rem;
+}
+
+.group-summary p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.role-badge {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--green-100);
+  color: var(--green-900);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.quiet-action {
+  min-height: 44px;
+  border: 0;
+  padding: 8px 0;
+  background: transparent;
+  color: var(--green-700);
+  font-weight: 800;
+}
+
+.solid-action {
+  display: inline-flex;
+  min-height: 50px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 14px;
+  padding: 0 18px;
+  background: var(--green-800);
+  color: white;
+  font-weight: 850;
+}
+
+.solid-action:disabled {
+  opacity: 0.7;
+}
+
+.small-action {
+  min-height: 44px;
+}
+
+.players-section {
+  display: grid;
+  padding-top: 8px;
+  gap: 14px;
+}
+
+.section-title-row h2 {
+  max-width: none;
+}
+
+.player-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  gap: 10px;
+  list-style: none;
+}
+
+.player-card {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 12px 14px;
+  gap: 12px;
+  background: var(--surface);
+}
+
+.player-card.inactive {
+  opacity: 0.62;
+}
+
+.player-avatar {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--green-100);
+  color: var(--green-900);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.player-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.player-copy strong,
+.player-copy span,
+.player-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-copy span,
+.player-copy small {
+  color: var(--muted);
+}
+
+.compact-panel {
+  padding: 20px;
+}
+
+.data-form,
+.data-form label {
+  display: grid;
+}
+
+.data-form {
+  gap: 15px;
+}
+
+.data-form label {
+  gap: 7px;
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.data-form label span {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.data-form input,
+.data-form select {
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid #b9c9c2;
+  border-radius: 14px;
+  padding: 0 14px;
+  background: white;
+  color: var(--ink);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(95px, 1fr);
+  gap: 12px;
+}
+
+.check-row {
+  display: flex;
+  flex-wrap: wrap;
+  min-height: 44px;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.check-row label { display: flex; align-items: center; }
+.group-summary { flex-wrap: wrap; }
+.empty-workspace .data-form { width: 100%; }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+.check-row input {
+  width: 20px;
+  min-height: 20px;
+  accent-color: var(--green-800);
+}
+
+.empty-workspace,
+.workspace-state,
+.empty-list {
+  display: grid;
+  justify-items: start;
+  padding: 28px 24px;
+}
+
+.empty-workspace {
+  gap: 12px;
+}
+
+.empty-workspace > p:not(.eyebrow),
+.workspace-state p,
+.empty-list span {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.empty-icon {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 8px;
+  place-items: center;
+  border-radius: 18px;
+  background: var(--green-100);
+  color: var(--green-900);
+  font-size: 1.8rem;
+}
+
+.empty-list {
+  gap: 4px;
+}
+
+.empty-list p {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.workspace-state {
+  min-height: 240px;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.spinner {
+  width: 34px;
+  height: 34px;
+  border: 4px solid var(--green-100);
+  border-top-color: var(--green-800);
+  border-radius: 50%;
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 @media (min-width: 640px) {
   .topbar {
     width: min(100%, 760px);
@@ -403,6 +742,10 @@ h2 {
 
   .main-content {
     padding-top: 44px;
+    gap: 20px;
+  }
+
+  .workspace {
     gap: 20px;
   }
 

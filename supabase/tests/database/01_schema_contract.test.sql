@@ -139,6 +139,15 @@ select is(
   'create_group não aceita UUID de owner'
 );
 select ok(
+  (select pg_get_functiondef('public.create_group(text,smallint,text)'::regprocedure)
+    ~ 'actor_id uuid := auth.uid\(\)'
+   and pg_get_functiondef('public.create_group(text,smallint,text)'::regprocedure)
+    ~ 'insert into public.groups'
+   and pg_get_functiondef('public.create_group(text,smallint,text)'::regprocedure)
+    ~ 'insert into public.group_members'),
+  'create_group deriva o owner de auth.uid e qualifica as duas tabelas'
+);
+select ok(
   (select count(*) = 0
    from pg_policies
    where schemaname = 'public'

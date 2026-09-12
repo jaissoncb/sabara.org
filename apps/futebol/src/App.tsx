@@ -3,6 +3,7 @@ import { HashRouter, Link, Navigate, Route, Routes, useNavigate } from 'react-ro
 import { AuthProvider } from './auth/AuthProvider'
 import { useAuth } from './auth/auth-context'
 import type { BootstrapContext } from './bootstrap/auth-pkce'
+import { GroupDashboard } from './groups/GroupDashboard'
 
 interface AppProps {
   bootstrap: BootstrapContext
@@ -50,35 +51,35 @@ function HomePage({ bootstrap }: AppProps) {
           <p className="notice" role="status">{bootstrap.message}</p>
         ) : null}
 
-        <section className="hero-card" aria-labelledby="hero-title">
-          <p className="eyebrow">Seu jogo, sem complicação</p>
-          <h1 id="hero-title">Times equilibrados em poucos toques.</h1>
-          <p className="hero-copy">
-            Selecione quem chegou, escolha dois ou três times e deixe o sorteio cuidar do resto.
-          </p>
-          {session ? (
-            <button className="primary-action" type="button" disabled>
-              Começar jogo <span aria-hidden="true">→</span>
-            </button>
-          ) : (
+        {session ? (
+          <GroupDashboard key={session.user.id} client={bootstrap.client} userId={session.user.id} />
+        ) : (
+          <>
+            <section className="hero-card" aria-labelledby="hero-title">
+              <p className="eyebrow">Seu jogo, sem complicação</p>
+              <h1 id="hero-title">Times equilibrados em poucos toques.</h1>
+              <p className="hero-copy">
+                Selecione quem chegou, escolha dois ou três times e deixe o sorteio cuidar do resto.
+              </p>
             <Link className="primary-action" to="/login">
               Entrar para começar <span aria-hidden="true">→</span>
             </Link>
-          )}
-          <p className="helper-text">Partidas e sorteios serão habilitados em uma fase posterior.</p>
-        </section>
+              <p className="helper-text">Partidas e sorteios serão habilitados em uma fase posterior.</p>
+            </section>
 
-        <section className="foundation" aria-labelledby="foundation-title">
-          <div>
-            <p className="eyebrow">Base preparada</p>
-            <h2 id="foundation-title">Rápida, instalável e feita para celular.</h2>
-          </div>
-          <ul className="feature-list">
-            <li><span aria-hidden="true">✓</span> Navegação segura no GitHub Pages</li>
-            <li><span aria-hidden="true">✓</span> PWA limitada a /futebol/</li>
-            <li><span aria-hidden="true">✓</span> Retorno PKCE antes das rotas</li>
-          </ul>
-        </section>
+            <section className="foundation" aria-labelledby="foundation-title">
+              <div>
+                <p className="eyebrow">Base preparada</p>
+                <h2 id="foundation-title">Rápida, instalável e feita para celular.</h2>
+              </div>
+              <ul className="feature-list">
+                <li><span aria-hidden="true">✓</span> Navegação segura no GitHub Pages</li>
+                <li><span aria-hidden="true">✓</span> PWA limitada a /futebol/</li>
+                <li><span aria-hidden="true">✓</span> Retorno PKCE antes das rotas</li>
+              </ul>
+            </section>
+          </>
+        )}
       </main>
 
       <footer className="footer">Sabará · Futebol entre amigos</footer>
