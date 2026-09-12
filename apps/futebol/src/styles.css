@@ -796,3 +796,9 @@ h2 {
 .draw-team h3 { margin-top: 0; }
 .draw-team ul { padding-left: 1.2rem; }
 .draw-team li { margin-block: 0.6rem; }
+.game-flow-heading, .game-flow-actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.game-flow-heading .eyebrow { color: var(--green-700); }
+.game-flow-step { flex: 0 0 auto; border-radius: 999px; padding: 0.35rem 0.6rem; background: var(--green-100); color: var(--green-900); font-size: 0.8rem; font-weight: 800; }
+.game-flow-note, .game-summary { color: var(--muted); line-height: 1.45; }
+.game-participants { display: grid; gap: 1rem; }
+.team-warning { border-radius: 0.7rem; padding: 0.65rem; background: #fff6dc; color: #755300; font-weight: 700; }

@@ -4,7 +4,7 @@ import { drawTeams, DrawInputError, type DrawResult } from './engine'
 
 const TEAM_NAMES = ['Azul', 'Vermelho', 'Verde']
 
-export function DrawPanel({ group, players }: { group: GroupWithRole; players: Player[] }) {
+function LegacyDrawPanel({ group, players }: { group: GroupWithRole; players: Player[] }) {
   const [open, setOpen] = useState(false)
   if (group.role !== 'owner' && group.role !== 'admin') return null
   const eligible = players.filter((player) => player.active && player.group_id === group.id)
@@ -17,6 +17,9 @@ export function DrawPanel({ group, players }: { group: GroupWithRole; players: P
     </section>
   )
 }
+void LegacyDrawPanel
+
+export { GameFlow as DrawPanel } from './GameFlow'
 
 function DrawForm({ players, playersOnCourt }: { players: Player[]; playersOnCourt: number }) {
   const [selected, setSelected] = useState<string[]>([])

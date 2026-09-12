@@ -8,7 +8,7 @@ A página autenticada lista os grupos acessíveis via RLS e seu elenco. É poss�
 
 Carregamento, primeira utilização, erros e nova tentativa são explícitos. Erros do servidor não são exibidos literalmente. A sessão é isolada por usuário e formulários são reinicializados ao trocar de jogador. Updates exigem uma linha retornada para não anunciar sucesso quando a RLS bloqueia a operação. As permissões visuais são conveniência; a autorização permanece no banco.
 
-A Fase 4 adiciona uma engine de sorteio isolada e uma prévia temporária dentro do grupo para owner/admin. Selecione jogadores ativos, escolha 2 ou 3 times e confira a distribuição balanceada, sem salvar. Consulte `PHASE_4_REPORT.md` para regras, arquitetura e testes. Fluxo completo de partidas, reroll avançado, ajustes manuais e persistência continuam nas fases seguintes. A configuração PWA e `/futebol/` foi preservada. Consulte `supabase/SECURITY_ADVISOR.md` para a disposição da Fase 2B.2C.
+A Fase 5 transforma a prévia em um fluxo local de jogo para owner/admin: configure nome, data, horário, 2/3 times e jogadores em quadra; selecione participantes ativos; e confira os times em cards. O jogo fica somente em memória, com retorno para editar configuração ou participantes. A engine isolada da Fase 4 continua responsável pelo sorteio. Reroll, ajuste manual e reservas interativas pertencem à Fase 6; persistência, histórico e compartilhamento, à Fase 7. Consulte `PHASE_4_REPORT.md` para as regras da engine e `PHASE_5_REPORT.md` para a entrega atual. A configuração PWA e `/futebol/` foi preservada. Consulte `supabase/SECURITY_ADVISOR.md` para a disposição da Fase 2B.2C.
 
 ## Requisitos
 
