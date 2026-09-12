@@ -16,12 +16,37 @@ const state: AdjustmentState = { playersOnCourt: 2, teams: [
 ] }
 
 describe('ajustes locais da Fase 6', () => {
-  it('troca jogadores sem duplicar ou perder participantes e conserva tamanhos', () => {
+  it('preserva os slots em trocas titular ↔ titular', () => {
     const result = swapPlayers(state, 0, 'a', 1, 'c', players)
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.state.teams.flatMap((team) => team.playerIds).sort()).toEqual(['a', 'b', 'c', 'd', 'g1', 'g2'])
     expect(result.state.teams.map((team) => team.playerIds)).toEqual([['g1', 'c', 'b'], ['g2', 'a', 'd']])
+    expect(result.state.teams.map((team) => team.reserveIds)).toEqual([['b'], ['d']])
+  })
+
+  it('preserva os slots em trocas reserva ↔ reserva', () => {
+    const result = swapPlayers(state, 0, 'b', 1, 'd', players)
+    expect(result).toEqual({ ok: true, state: { playersOnCourt: 2, teams: [
+      { playerIds: ['g1', 'a', 'd'], reserveIds: ['d'] },
+      { playerIds: ['g2', 'c', 'b'], reserveIds: ['b'] },
+    ] } })
+  })
+
+  it('preserva os slots em trocas titular ↔ reserva', () => {
+    const result = swapPlayers(state, 0, 'a', 1, 'd', players)
+    expect(result).toEqual({ ok: true, state: { playersOnCourt: 2, teams: [
+      { playerIds: ['g1', 'd', 'b'], reserveIds: ['b'] },
+      { playerIds: ['g2', 'c', 'a'], reserveIds: ['a'] },
+    ] } })
+  })
+
+  it('preserva os slots em trocas reserva ↔ titular', () => {
+    const result = swapPlayers(state, 0, 'b', 1, 'c', players)
+    expect(result).toEqual({ ok: true, state: { playersOnCourt: 2, teams: [
+      { playerIds: ['g1', 'a', 'c'], reserveIds: ['c'] },
+      { playerIds: ['g2', 'b', 'd'], reserveIds: ['d'] },
+    ] } })
   })
 
   it('rejeita movimentação simples que deixaria os tamanhos inválidos', () => {
@@ -35,6 +60,35 @@ describe('ajustes locais da Fase 6', () => {
 
   it('não deixa um time com goleiro sem goleiro em quadra quando há alternativa', () => {
     expect(swapCourtStatus(state, 0, 'g1', 'b', players)).toEqual({ ok: false, message: 'Este time possui goleiro, então um goleiro precisa permanecer em quadra.' })
+  })
+
+  it('mantém cobertura de todos os times quando há goleiros suficientes', () => {
+    const covered: AdjustmentState = { playersOnCourt: 2, teams: [
+      { playerIds: ['g1', 'a'], reserveIds: [] },
+      { playerIds: ['g2', 'b'], reserveIds: [] },
+      { playerIds: ['g3', 'c'], reserveIds: [] },
+    ] }
+    const withThreeKeepers = new Map([...players, ['g3', { id: 'g3', skillRating: 3, isGoalkeeper: true }] as const])
+    expect(swapPlayers(covered, 0, 'g1', 1, 'b', withThreeKeepers)).toEqual({ ok: false, message: 'O ajuste concentraria goleiros e reduziria a cobertura dos times.' })
+    expect(swapPlayers(covered, 0, 'g1', 1, 'g2', withThreeKeepers).ok).toBe(true)
+  })
+
+  it('não reduz a cobertura possível quando há menos goleiros que times', () => {
+    const limited: AdjustmentState = { playersOnCourt: 2, teams: [
+      { playerIds: ['g1', 'a'], reserveIds: [] },
+      { playerIds: ['g2', 'b'], reserveIds: [] },
+      { playerIds: ['c', 'd'], reserveIds: [] },
+    ] }
+    expect(swapPlayers(limited, 0, 'g1', 1, 'b', players)).toEqual({ ok: false, message: 'O ajuste concentraria goleiros e reduziria a cobertura dos times.' })
+    expect(swapPlayers(limited, 0, 'g1', 1, 'g2', players).ok).toBe(true)
+  })
+
+  it('rejeita mover o único goleiro para um time que já possui goleiro', () => {
+    const movable: AdjustmentState = { playersOnCourt: 1, teams: [
+      { playerIds: ['g1', 'a'], reserveIds: ['a'] },
+      { playerIds: ['g2'], reserveIds: [] },
+    ] }
+    expect(movePlayer(movable, 0, 'g1', 1, players)).toEqual({ ok: false, message: 'O ajuste concentraria goleiros e reduziria a cobertura dos times.' })
   })
 
   it('detecta reserva externa, duplicidade e contagem de quadra inválidas', () => {

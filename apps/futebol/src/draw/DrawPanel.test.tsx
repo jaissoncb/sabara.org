@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { DrawPanel } from './DrawPanel'
+import { localDateInputValue } from './local-date'
 import type { GroupWithRole, Player } from '../groups/group-service'
 
 const group: GroupWithRole = { id: 'a', name: 'Grupo', role: 'owner', sport: 'futsal', default_players_on_court: 5, created_by: 'user', created_at: '', updated_at: '' }
@@ -78,6 +79,7 @@ describe('fluxo de jogo das Fases 5 e 6', () => {
     await user.click(within(result).getAllByRole('button', { name: 'Trocar com selecionado' })[0]!)
     expect(within(result).getByText(/Ajustado manualmente/)).toBeInTheDocument()
     expect(within(result).getByRole('status')).toHaveTextContent('Ajuste aplicado')
+    expect(within(result).queryByRole('button', { name: 'Cancelar ajuste' })).not.toBeInTheDocument()
     expect(within(result).getAllByRole('listitem')).toHaveLength(14)
   })
 
@@ -111,5 +113,13 @@ describe('fluxo de jogo das Fases 5 e 6', () => {
     expect(confirm).toHaveBeenCalledOnce()
     expect(await screen.findByText(/Diferença entre médias:/)).toBeInTheDocument()
     expect(screen.queryByText(/Ajustado manualmente/)).not.toBeInTheDocument()
+    expect(within(result).queryByRole('button', { name: 'Cancelar ajuste' })).not.toBeInTheDocument()
+  })
+
+  it('formata a data inicial a partir dos campos locais, sem UTC', () => {
+    const date = new Date(0)
+    date.setFullYear(2026, 0, 2)
+    date.setHours(0, 30, 0, 0)
+    expect(localDateInputValue(date)).toBe('2026-01-02')
   })
 })
