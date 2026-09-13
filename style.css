@@ -10,7 +10,10 @@ body {
 
 body {
   min-height: 100vh;
-  background: #ffffff;
+  min-height: 100svh;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(25, 92, 255, 0.055), transparent 28rem),
+    #f8f9fb;
   color: #11151b;
   font-family:
     Inter,
@@ -34,7 +37,7 @@ body {
 }
 
 .hero {
-  width: min(760px, 92vw);
+  width: min(780px, 92vw);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -44,8 +47,10 @@ body {
 .logo {
   display: block;
   width: min(650px, 88vw);
+  max-height: 34vh;
+  object-fit: contain;
   height: auto;
-  margin: 0 0 34px;
+  margin: 0 0 30px;
 }
 
 .copy {
@@ -57,16 +62,16 @@ body {
 h1 {
   margin: 0;
   padding-left: 0.38em;
-  font-size: clamp(0.82rem, 1.1vw, 0.96rem);
+  font-size: clamp(0.78rem, 1.1vw, 0.95rem);
   line-height: 1;
   font-weight: 700;
   letter-spacing: 0.38em;
-  color: #6f7580;
+  color: #656c78;
 }
 
 p {
   margin: 14px 0 0;
-  font-size: clamp(1.08rem, 2vw, 1.32rem);
+  font-size: clamp(1.05rem, 2vw, 1.32rem);
   line-height: 1.4;
   font-weight: 400;
   letter-spacing: 0.01em;
@@ -74,22 +79,27 @@ p {
 }
 
 @media (max-width: 520px) {
+  .page {
+    padding: 24px 18px;
+  }
+
   .logo {
     width: min(92vw, 560px);
-    margin-bottom: 28px;
+    margin-bottom: 26px;
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .hero {
-    animation: fade-in 500ms ease-out both;
+    animation: appear 500ms ease-out both;
   }
 
-  @keyframes fade-in {
+  @keyframes appear {
     from {
       opacity: 0;
       transform: translateY(5px);
     }
+
     to {
       opacity: 1;
       transform: translateY(0);
