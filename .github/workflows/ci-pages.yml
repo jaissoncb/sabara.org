@@ -1,0 +1,240 @@
+name: Futebol CI and Pages preparation
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact main SHA to release (40 hexadecimal characters)
+        required: true
+        type: string
+      site_variant:
+        description: Full site or root-only frontend rollback
+        required: true
+        type: choice
+        default: full
+        options:
+          - full
+          - root-only
+  pull_request:
+  push:
+    branches:
+      - codex/futebol-mvp
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      release_allowed: ${{ steps.guard.outputs.release_allowed }}
+      preview_id: ${{ steps.preview.outputs.artifact-id }}
+      rollback_id: ${{ steps.rollback.outputs.artifact-id }}
+      full_digest: ${{ steps.validation.outputs.full_digest }}
+      rollback_digest: ${{ steps.validation.outputs.root_only_digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate manual release request before building
+        id: guard
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          SITE_VARIANT: ${{ inputs.site_variant }}
+        run: node scripts/release-guard.mjs
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/futebol/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm --dir apps/futebol install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm --dir apps/futebol lint
+
+      - name: Typecheck
+        run: pnpm --dir apps/futebol typecheck
+
+      - name: Test
+        run: pnpm --dir apps/futebol test
+
+      - name: Test bundle security and Pages assembly
+        run: |
+          pnpm --dir apps/futebol test:bundle-security
+          node --test scripts/prepare-pages.test.mjs scripts/release-workflow.test.mjs
+
+      - name: Build Futebol
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: pnpm --dir apps/futebol build
+
+      - name: Assemble root and Futebol site
+        run: |
+          node scripts/prepare-pages.mjs full
+          node scripts/prepare-pages.mjs root-only
+
+      - name: Validate both publication trees before conventional uploads
+        id: validation
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          node scripts/validate-publication.mjs full _site
+          node scripts/validate-publication.mjs root-only apps/futebol/coverage/root-rollback
+
+      - name: Upload validated site preview
+        id: preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-preview
+          path: _site
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload validated root rollback (never publishes)
+        id: rollback
+        uses: actions/upload-artifact@v4
+        with:
+          name: root-rollback
+          path: apps/futebol/coverage/root-rollback
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Record conventional artifact provenance
+        env:
+          PREVIEW_ID: ${{ steps.preview.outputs.artifact-id }}
+          PREVIEW_DIGEST: ${{ steps.preview.outputs.artifact-digest }}
+          ROLLBACK_ID: ${{ steps.rollback.outputs.artifact-id }}
+          ROLLBACK_DIGEST: ${{ steps.rollback.outputs.artifact-digest }}
+        run: |
+          node --input-type=module -e '
+            import { appendFileSync } from "node:fs";
+            const e = process.env;
+            const summary = `SHA: ${e.GITHUB_SHA}\npages-preview: ID ${e.PREVIEW_ID}, digest ${e.PREVIEW_DIGEST}\nroot-rollback: ID ${e.ROLLBACK_ID}, digest ${e.ROLLBACK_DIGEST}\n`;
+            console.log(summary);
+            appendFileSync(e.GITHUB_STEP_SUMMARY, summary);
+          '
+
+  package:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.expected_sha == github.sha &&
+      needs.build.outputs.release_allowed == 'true'
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_id: ${{ steps.pages.outputs.artifact_id }}
+    steps:
+      - name: Checkout run SHA (never expected_sha input)
+        uses: actions/checkout@v6
+
+      - name: Revalidate manual release request
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          SITE_VARIANT: ${{ inputs.site_variant }}
+        run: node scripts/release-guard.mjs
+
+      - name: Setup pnpm verification tools
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - name: Setup Node.js verification tools
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/futebol/pnpm-lock.yaml
+
+      - name: Install verification tools (does not rebuild)
+        run: pnpm --dir apps/futebol install --frozen-lockfile
+
+      - name: Require a single artifact ID and BUILD content digest
+        env:
+          SELECTED_ARTIFACT_ID: ${{ inputs.site_variant == 'root-only' && needs.build.outputs.rollback_id || needs.build.outputs.preview_id }}
+          EXPECTED_CONTENT_DIGEST: ${{ inputs.site_variant == 'root-only' && needs.build.outputs.rollback_digest || needs.build.outputs.full_digest }}
+        run: |
+          node --input-type=module -e '
+            if (!/^[0-9]+$/.test(process.env.SELECTED_ARTIFACT_ID) || !/^[a-f0-9]{64}$/.test(process.env.EXPECTED_CONTENT_DIGEST)) {
+              throw new Error("Missing or invalid same-run artifact provenance");
+            }
+          '
+
+      - name: Download selected validated artifact exclusively from this run
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ inputs.site_variant == 'root-only' && needs.build.outputs.rollback_id || needs.build.outputs.preview_id }}
+          merge-multiple: true
+          path: _site
+
+      - name: Validate exact selected package before Pages upload
+        env:
+          SITE_VARIANT: ${{ inputs.site_variant }}
+          EXPECTED_CONTENT_DIGEST: ${{ inputs.site_variant == 'root-only' && needs.build.outputs.rollback_digest || needs.build.outputs.full_digest }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: node scripts/validate-publication.mjs "$SITE_VARIANT" _site
+
+      - name: Upload exact GitHub Pages package (no deployment)
+        id: pages
+        uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          name: github-pages
+          path: _site
+          include-hidden-files: true
+          retention-days: 90
+
+      - name: Record Pages package provenance before environment approval
+        env:
+          PAGES_ARTIFACT_ID: ${{ steps.pages.outputs.artifact_id }}
+          SITE_VARIANT: ${{ inputs.site_variant }}
+        run: |
+          node --input-type=module -e '
+            import { appendFileSync } from "node:fs";
+            const e = process.env;
+            const summary = `SHA: ${e.GITHUB_SHA}\nvariant: ${e.SITE_VARIANT}\ngithub-pages artifact ID: ${e.PAGES_ARTIFACT_ID}\nSTOP: inspect package before approving deployment.\n`;
+            console.log(summary);
+            appendFileSync(e.GITHUB_STEP_SUMMARY, summary);
+          '
+
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.expected_sha == github.sha &&
+      needs.package.result == 'success'
+    needs: package
+    runs-on: ubuntu-latest
+    concurrency:
+      group: futebol-pages-deployment
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages

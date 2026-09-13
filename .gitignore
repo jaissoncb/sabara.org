@@ -7,8 +7,19 @@ Desktop.ini
 .idea/
 .vscode/
 
-# Local tooling and previews
+# Local tooling, previews, backups and logs
 .local-backup/
 .repo-sync/
 .tools/
 *.log
+
+# Futebol dependencies and generated artifacts
+_site/
+apps/futebol/node_modules/
+apps/futebol/dist/
+apps/futebol/coverage/
+
+# Local environment files; keep the public configuration template
+**/.env
+**/.env.*
+!**/.env.example
