@@ -1,5 +1,48 @@
 # Security Advisor disposition
 
+## Fase 8B — `public.save_match_draw(uuid, jsonb)` (validação LOCAL)
+
+**Disposition:** fronteira SECURITY DEFINER intencional. Migration
+`20260913081632_harden_save_match_draw.sql`, ainda não aplicada remotamente.
+
+SECURITY INVOKER herdava os mesmos grants que permitiam ao cliente owner/admin
+contornar a RPC e corromper partidas drawn. A nova fronteira executa somente
+o salvamento transacional validado; authenticated conserva SELECT via RLS,
+sem INSERT/UPDATE/DELETE de tabela ou coluna nas cinco tabelas do grafo.
+As 14 policies de escrita foram removidas; as cinco SELECT foram preservadas.
+
+Controles: owner explícito postgres; search_path=pg_catalog; relações, tipos e
+funções qualificados; nenhum SQL dinâmico ou objeto temporário na RPC;
+EXECUTE somente authenticated além do owner, sem PUBLIC/anon/service_role;
+ator exclusivamente auth.uid(); membership owner/admin validada diretamente
+com FOR SHARE até commit/rollback; created_by derivado do ator; payload rejeita
+identidades/roles/status estranhos; advisory lock e comparação idempotente
+preservados; colisões de outro ator/grupo rejeitadas genericamente antes da
+reconstrução do grafo. Testes cobrem DML direto, abuso, isolamento, locks,
+demotion/removal, retry, rollback e leitura.
+
+`postgres` e `service_role` têm BYPASSRLS e privilégios de infraestrutura;
+a garantia destina-se ao cliente normal authenticated. Nenhuma chave
+privilegiada é usada no frontend. A autorização explícita é indispensável:
+a função não depende da RLS para limitar suas escritas privilegiadas.
+
+Advisors locais da CLI 2.117.0: nenhum WARN/ERROR, dois INFO unused_index
+(`team_assignments_group_player_idx`, `team_assignments_participant_fk_idx`).
+Índices preservados. A ausência local do finding 0029 não elimina a necessidade
+de revisar sua eventual ocorrência remota: se identificar esta RPC, a
+disposição é intencional sob os controles acima, e não motivo para reabrir DML.
+[Finding 0029](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable).
+Não foram consultados advisors nem executado SQL no remoto nesta subetapa.
+
+Teste de shadowing: tabelas/funções temporárias não substituem os objetos
+qualificados. Um domínio temporário chamado uuid faz a implementação confiável
+de auth.uid() rejeitar a chamada com 42P13; nenhum grafo é escrito. Esse caso
+artificial é uma falha fechada, não uma identidade alternativa. A implementação
+Auth do Supabase não foi alterada.
+
+A disposição anterior de create_group e os registros remotos históricos abaixo
+permanecem. A validação local desta fase não recertifica ACL/Auth remotos.
+
 ## `public.create_group(text, smallint, text)`
 
 **Disposition:** accepted / intentional security finding.

@@ -24,7 +24,7 @@ assert.ok(!process.env.DOCKER_HOST || socket(process.env.DOCKER_HOST), 'local Do
 assert.ok(socket(docker(['context', 'inspect', '--format', '{{.Endpoints.docker.Host}}'])), 'local Docker only')
 const sql = (input) => docker(['exec', '-i', container, 'psql', '-X', '-A', '-t', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'], input)
 assert.deepEqual(sql('select version from supabase_migrations.schema_migrations order by version').split('\n'),
-  ['20260911113852', '20260911113856', '20260911113900', '20260911152916', '20260911200324', '20260912195435'])
+  ['20260911113852', '20260911113856', '20260911113900', '20260911152916', '20260911200324', '20260912195435', '20260913081632'])
 const status = spawnSync(process.platform === 'win32' ? 'cmd.exe' : 'pnpm',
   process.platform === 'win32' ? ['/d', '/s', '/c', 'pnpm dlx supabase@2.117.0 status -o json'] : ['dlx', 'supabase@2.117.0', 'status', '-o', 'json'], {
   cwd: resolve(app, '../..'), encoding: 'utf8', windowsHide: true, timeout: 30_000,

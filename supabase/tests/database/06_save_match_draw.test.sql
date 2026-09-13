@@ -9,8 +9,10 @@ insert into auth.users (id, raw_user_meta_data) values
   ('70000000-0000-0000-0000-000000000003', '{}'),
   ('70000000-0000-0000-0000-000000000004', '{}');
 
-select ok(not (select prosecdef from pg_proc where oid = 'public.save_match_draw(uuid,jsonb)'::regprocedure),
-  'save_match_draw é SECURITY INVOKER');
+select ok((select prosecdef from pg_proc where oid = 'public.save_match_draw(uuid,jsonb)'::regprocedure),
+  'save_match_draw é SECURITY DEFINER');
+select is((select pg_get_userbyid(proowner) from pg_proc where oid = 'public.save_match_draw(uuid,jsonb)'::regprocedure),
+  'postgres', 'owner explícito controlado');
 select ok((select proconfig @> array['search_path=pg_catalog'] from pg_proc
   where oid = 'public.save_match_draw(uuid,jsonb)'::regprocedure), 'search_path fixo');
 select ok(has_function_privilege('authenticated', 'public.save_match_draw(uuid,jsonb)', 'execute'), 'authenticated executa RPC');
@@ -20,7 +22,7 @@ select ok(not exists (select 1 from pg_proc as p,
   lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) as acl
   where p.oid = 'public.save_match_draw(uuid,jsonb)'::regprocedure and acl.grantee = 0 and acl.privilege_type = 'EXECUTE'),
   'PUBLIC não executa RPC');
-select ok(has_column_privilege('authenticated', 'public.matches', 'id', 'insert'), 'grant mínimo de INSERT id');
+select ok(not has_column_privilege('authenticated', 'public.matches', 'id', 'insert'), 'sem INSERT id direto');
 select ok(not has_column_privilege('anon', 'public.matches', 'id', 'insert'), 'anon não insere id');
 select ok(not has_column_privilege('authenticated', 'public.matches', 'id', 'update'), 'id continua imutável');
 select ok(not has_column_privilege('authenticated', 'public.matches', 'created_by', 'update'), 'creator continua imutável');
@@ -153,7 +155,7 @@ select is(public.save_match_draw('72000000-0000-0000-0000-000000000003', current
   '72000000-0000-0000-0000-000000000003'::uuid, 'admin salva');
 select is((select created_by from public.matches where id = '72000000-0000-0000-0000-000000000003'), auth.uid(), 'creator deriva da identidade real do admin');
 select throws_ok($$select public.save_match_draw('72000000-0000-0000-0000-000000000001', current_setting('test.phase7_payload')::jsonb)$$,
-  '22023', null, 'admin não toma chave idempotente criada por outro actor');
+  '40001', 'match id unavailable; retry in a fresh transaction', 'admin não toma chave idempotente criada por outro actor');
 
 select set_config('request.jwt.claims', '{"sub":"70000000-0000-0000-0000-000000000003","role":"authenticated"}', true);
 select is((select count(*)::integer from public.matches where group_id = current_setting('test.phase7_group')::uuid and status = 'drawn'), 3, 'member lê partidas finais do grupo');
@@ -163,11 +165,14 @@ select throws_ok($$select public.save_match_draw('72000000-0000-0000-0000-000000
 select throws_ok($$insert into public.matches (id, group_id, match_date, created_by)
   values ('72000000-0000-0000-0000-000000000004', current_setting('test.phase7_group')::uuid, current_date, auth.uid())$$,
   '42501', null, 'grant de id não permite INSERT direto por member');
-update public.matches set status = 'draft' where id = '72000000-0000-0000-0000-000000000001';
+select throws_ok($$update public.matches set status = 'draft' where id = '72000000-0000-0000-0000-000000000001'$$,
+  '42501', null, 'member não altera status diretamente');
 select is((select status::text from public.matches where id = '72000000-0000-0000-0000-000000000001'), 'drawn', 'member não altera status');
-update public.draw_runs set accepted = false where match_id = '72000000-0000-0000-0000-000000000001';
+select throws_ok($$update public.draw_runs set accepted = false where match_id = '72000000-0000-0000-0000-000000000001'$$,
+  '42501', null, 'member não altera aceite diretamente');
 select is((select count(*)::integer from public.draw_runs where match_id = '72000000-0000-0000-0000-000000000001' and accepted), 1, 'member não altera aceite');
-delete from public.matches where id = '72000000-0000-0000-0000-000000000001';
+select throws_ok($$delete from public.matches where id = '72000000-0000-0000-0000-000000000001'$$,
+  '42501', null, 'member não exclui diretamente');
 select is((select count(*)::integer from public.matches where id = '72000000-0000-0000-0000-000000000001'), 1, 'member não exclui');
 
 select set_config('request.jwt.claims', '{"sub":"70000000-0000-0000-0000-000000000004","role":"authenticated"}', true);
@@ -199,6 +204,8 @@ from (values
   ('snapshot obrigatório nulo', jsonb_set(current_setting('test.phase7_payload')::jsonb, '{participants,0,is_goalkeeper_snapshot}', 'null'), '22023'),
   ('booleano deve ser booleano JSON', jsonb_set(current_setting('test.phase7_payload')::jsonb, '{assignments,0,starts_as_reserve}', '"false"'), '22023'),
   ('creator não é campo de entrada', current_setting('test.phase7_payload')::jsonb || '{"created_by":"70000000-0000-0000-0000-000000000004"}', '22023'),
+  ('user_id não é campo de entrada', current_setting('test.phase7_payload')::jsonb || '{"user_id":"70000000-0000-0000-0000-000000000004"}', '22023'),
+  ('owner_id não é campo de entrada', current_setting('test.phase7_payload')::jsonb || '{"owner_id":"70000000-0000-0000-0000-000000000004"}', '22023'),
   ('role não é campo de entrada', current_setting('test.phase7_payload')::jsonb || '{"role":"owner"}', '22023'),
   ('status não é campo de entrada', current_setting('test.phase7_payload')::jsonb || '{"status":"completed"}', '22023'),
   ('filhos não podem declarar outro match', jsonb_set(current_setting('test.phase7_payload')::jsonb, '{draw_runs,0,match_id}', '"72000000-0000-0000-0000-000000000001"'), '22023'),

@@ -144,11 +144,17 @@ select set_config('test.player_admin', (select id::text from public.players wher
 update public.players set skill_rating = 4.5 where id = current_setting('test.player_admin')::uuid;
 select is((select skill_rating::text from public.players where id = current_setting('test.player_admin')::uuid), '4.5', 'Admin edita player');
 
+select throws_ok($$insert into public.matches (group_id, match_date, created_by)
+  values (current_setting('test.group_a')::uuid, current_date, auth.uid())$$,
+  '42501', null, 'Admin cria grafo somente via RPC');
+-- Privileged local fixture; graph DML is no longer a client capability.
+reset role;
 insert into public.matches (group_id, name, match_date, team_count, created_by)
 values (current_setting('test.group_a')::uuid, 'Jogo Admin', current_date, 2, auth.uid());
 select set_config('test.match_a', (select id::text from public.matches where name = 'Jogo Admin'), true);
 update public.matches set name = 'Jogo Admin editado' where id = current_setting('test.match_a')::uuid;
-select is((select name from public.matches where id = current_setting('test.match_a')::uuid), 'Jogo Admin editado', 'Admin cria e edita jogo');
+select is((select name from public.matches where id = current_setting('test.match_a')::uuid), 'Jogo Admin editado', 'fixture local de jogo preparada');
+set local role authenticated;
 
 delete from public.group_members where group_id = current_setting('test.group_a')::uuid and role = 'owner';
 select is((select count(*)::integer from public.group_members where group_id = current_setting('test.group_a')::uuid and role = 'owner'), 1, 'Admin não remove owner');
@@ -205,6 +211,8 @@ select throws_ok(
   $$insert into public.players (group_id, name, skill_rating) values (current_setting('test.group_a')::uuid, 'Nível alto', 5.5)$$,
   '23514', null, 'skill maior que 5 falha'
 );
+-- Exercise constraints as postgres, independently of client permission denials.
+reset role;
 select throws_ok(
   $$insert into public.matches (group_id, name, match_date, team_count, created_by) values (current_setting('test.group_a')::uuid, 'Times inválidos', current_date, 4, auth.uid())$$,
   '23514', null, 'team_count inválido falha'
@@ -261,6 +269,7 @@ select throws_ok(
 );
 
 select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+set local role authenticated;
 select throws_ok(
   $$delete from public.players where id = current_setting('test.player_a')::uuid$$,
   '42501', null, 'cliente autenticado não apaga player histórico'
@@ -283,6 +292,7 @@ select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-0000000
 insert into public.group_members (group_id, user_id, role)
 values (current_setting('test.group_a')::uuid, '10000000-0000-0000-0000-000000000005', 'admin');
 select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-000000000005","role":"authenticated"}', true);
+reset role;
 insert into public.matches (group_id, name, match_date, team_count, created_by)
 values (current_setting('test.group_a')::uuid, 'Jogo E', current_date, 2, auth.uid());
 select set_config('test.match_e', (select id::text from public.matches where name = 'Jogo E'), true);
@@ -296,6 +306,9 @@ select ok(
 
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+select throws_ok($$delete from public.matches where id = current_setting('test.match_a')::uuid$$,
+  '42501', null, 'owner não exclui grafo diretamente');
+reset role;
 insert into public.draw_runs (group_id, match_id, run_number, seed, algorithm_version, accepted)
 values (current_setting('test.group_a')::uuid, current_setting('test.match_a')::uuid, 1, 'seed-a', 'v1', true);
 delete from public.matches where id = current_setting('test.match_a')::uuid;
