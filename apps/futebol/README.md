@@ -33,6 +33,8 @@ pnpm test:e2e
 pnpm test:bundle-security
 pnpm test:release-build
 node --test ../../scripts/prepare-pages.test.mjs
+node --test ../../scripts/release-workflow.test.mjs
+node ../../scripts/test-publication-local.mjs
 node scripts/audit-bundle.mjs
 ```
 
@@ -72,6 +74,62 @@ O scanner bloqueia padrões conhecidos de Supabase secret/service-role, JWT não
 Release permanece **NOT READY**: confirmar/configurar as variables reais, confirmar Pages source, integrar `origin/main` preservando a raiz e obter autorização de deploy. O workflow automático de Pages pela branch pode operar independentemente de `ENABLE_PAGES_DEPLOY`; revisar a source antes de merge em main. Nenhuma dessas operações faz parte da implementação local 8C. Consulte `PHASE_8C_REPORT.md`.
 
 O client usa PKCE, persiste e renova sessões válidas e desativa a detecção automática do callback. O bootstrap troca `?code=...` por sessão e limpa a URL antes de montar o `HashRouter`.
+
+## Fase 8E — preparação de release manual (sem publicação)
+
+O workflow mantém CI em push main/Futebol e pull_request: lint, typecheck,
+testes, segurança, build e montagem. Push **não autoriza PACKAGE nem DEPLOY**;
+`ENABLE_PAGES_DEPLOY` não é mais usado e não deve ser criado.
+
+Uma release futura exige `workflow_dispatch` executado em `refs/heads/main`.
+`expected_sha` é obrigatório: exatamente os 40 caracteres do SHA do próprio
+run (`github.sha`). Outra branch, SHA vazio/incorreto ou variante desconhecida
+falha antes do build/package. Não se faz checkout do input como ref arbitrária.
+`site_variant` é choice `full` (default: raiz + `/futebol/`) ou `root-only`
+(somente a raiz, para rollback frontend).
+
+BUILD produz `pages-preview` e `root-rollback`, ambos convencionais, validados,
+com `.nojekyll`, retenção de 90 dias e ID/digest/SHA no log e summary.
+Root-only reutiliza a mesma allowlist e assets da raiz; seu staging fica em
+`apps/futebol/coverage/root-rollback`, sem app/fontes/configuração privada.
+O pacote root-only reflete **a raiz do SHA desse run**, não recupera uma raiz
+antiga automaticamente. Preservar o artifact e verificar os hashes aprovados
+antes da troca de source; rollback do frontend nunca reverte migrations.
+
+PACKAGE só roda no dispatch validado em main. Exige ID único e digest de conteúdo
+do BUILD, baixa exclusivamente o artifact selecionado do mesmo run e compara
+seu digest de conteúdo imutável. Valida novamente raiz/hidden/scanner
+e, em full, configuração pública/PWA com o verificador existente. Não recompila.
+Usa `actions/upload-pages-artifact@v5.0.0`, `include-hidden-files: true`, nome
+`github-pages`, e registra o ID antes da fronteira de publicação. Uploads
+convencionais continuam `actions/upload-artifact@v4`; deployment continua
+`actions/deploy-pages@v4`. A v5.0.0 suporta o input hidden oficialmente e usa
+internamente upload-artifact v7, preservando o formato tar de Pages.
+
+O único hidden permitido em qualquer conteúdo publicável é `/.nojekyll`.
+O validador rejeita todos os demais dotfiles/diretórios (inclusive vazios),
+`.env*`, `.git*`, caches/editor, symlinks e entradas fora da allowlist. Também
+exige robots/.nojekyll e compara os bytes raiz com a fonte. Incluir hidden
+no upload não amplia essa allowlist. O scanner de credenciais é complementar.
+
+DEPLOY depende de PACKAGE e usa somente `github-pages` já pronto, sem checkout,
+download ou rebuild. Apenas DEPLOY referencia o environment `github-pages`,
+com permissions contents read/pages write/id-token write e serialização.
+**Required reviewer ainda precisa ser configurado sob autorização separada**:
+sem essa regra, dispatch válido pode seguir do PACKAGE direto ao DEPLOY.
+Não executar dispatch até existir a aprovação protegida e Pages source Actions.
+Inspecionar o tar exato (ID/digest/tamanho/SHA/variant) antes de aprovar o job.
+
+Nesta preparação, PACKAGE/DEPLOY reais são skipped na branch. A matriz
+push/dispatch é testada localmente contra as condições exatas do YAML; não
+há dispatch remoto/publicação. `test-publication-local.mjs` testa full/root-only,
+transporte com os flags tar da Action oficial e servidor/Chrome local, sem upload
+ou chamada de Auth de produção. No Windows esse teste requer GNU tar do Git;
+o E2E funcional existente continua exclusivamente Docker local.
+
+Settings Pages/source/environment/variables, PR, merge main e publicação exigem
+autorizações posteriores. Este checkpoint prepara os controles, não encerra a
+Fase 8E e não cria relatório final.
 
 ## Tipos do banco
 
