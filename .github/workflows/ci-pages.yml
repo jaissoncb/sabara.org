@@ -41,7 +41,15 @@ jobs:
       - name: Test
         run: pnpm --dir apps/futebol test
 
+      - name: Test bundle security and Pages assembly
+        run: |
+          pnpm --dir apps/futebol test:bundle-security
+          node --test scripts/prepare-pages.test.mjs
+
       - name: Build Futebol
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
         run: pnpm --dir apps/futebol build
 
       - name: Assemble root and Futebol site

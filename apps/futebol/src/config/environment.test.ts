@@ -8,12 +8,12 @@ describe('getSupabaseEnvironment', () => {
   it('aceita apenas as duas variaveis publicas previstas', () => {
     expect(
       getSupabaseEnvironment({
-        VITE_SUPABASE_URL: ' https://example.supabase.co ',
-        VITE_SUPABASE_PUBLISHABLE_KEY: ' publishable-key ',
+        VITE_SUPABASE_URL: ' https://abcdefghijklmnopqrst.supabase.co ',
+        VITE_SUPABASE_PUBLISHABLE_KEY: ' sb_publishable_AbCdEfGhIjKlMnOpQrStUvWxYz012345 ',
       }),
     ).toEqual({
-      url: 'https://example.supabase.co',
-      publishableKey: 'publishable-key',
+      url: 'https://abcdefghijklmnopqrst.supabase.co',
+      publishableKey: 'sb_publishable_AbCdEfGhIjKlMnOpQrStUvWxYz012345',
     })
   })
 
@@ -26,7 +26,7 @@ describe('getSupabaseEnvironment', () => {
 
   it('rejeita uma chave secreta no bundle do navegador', () => {
     expect(() => getSupabaseEnvironment({
-      VITE_SUPABASE_URL: 'https://example.supabase.co',
+      VITE_SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co',
       VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_secret_do-not-use',
     })).toThrow(/chave pública/i)
   })

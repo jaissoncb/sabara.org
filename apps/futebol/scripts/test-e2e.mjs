@@ -36,11 +36,16 @@ const key = local.ANON_KEY
 assert.ok(key, 'local public key missing')
 // Only the LOCAL public anon key is passed to the build. No privileged credentials.
 function buildApp(publicKey) {
-const build = spawnSync(process.execPath, ['node_modules/vite/bin/vite.js', 'build'], {
+const build = spawnSync(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--mode', 'local-test'], {
   cwd: app, encoding: 'utf8', windowsHide: true, timeout: 90_000,
   env: { ...process.env, VITE_SUPABASE_URL: api, VITE_SUPABASE_PUBLISHABLE_KEY: publicKey },
 })
 assert.equal(build.status, 0, build.stderr)
+const verify = spawnSync(process.execPath, ['scripts/verify-build.mjs', '--local'], {
+  cwd: app, encoding: 'utf8', windowsHide: true, timeout: 30_000,
+  env: { ...process.env, VITE_SUPABASE_URL: api, VITE_SUPABASE_PUBLISHABLE_KEY: publicKey },
+})
+assert.equal(verify.status, 0, verify.stderr)
 }
 buildApp(key)
 const mime = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml' }

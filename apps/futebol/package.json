@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "packageManager": "pnpm@11.19.0",
   "scripts": {
@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:e2e": "node scripts/test-e2e.mjs",
     "test:bundle-security": "node --test scripts/test-bundle-security.mjs",
+    "test:release-build": "node scripts/test-release-build.mjs",
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {

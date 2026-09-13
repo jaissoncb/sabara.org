@@ -16,7 +16,7 @@ Owner/admin/member consultam partidas salvas, seus snapshots, times, reservas e 
 
 ## Requisitos
 
-- Node.js 22 ou superior
+- Node.js 22.18 ou superior (scripts Node importam o validador TypeScript sem dependência adicional)
 - pnpm 11
 
 ## Comandos
@@ -31,6 +31,8 @@ pnpm build
 node scripts/test-draw-contract.mjs
 pnpm test:e2e
 pnpm test:bundle-security
+pnpm test:release-build
+node --test ../../scripts/prepare-pages.test.mjs
 node scripts/audit-bundle.mjs
 ```
 
@@ -52,6 +54,22 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sua-chave-publica
 ```
 
 Nunca coloque uma `service_role` ou `sb_secret_...` no frontend. Arquivos `.env*`, exceto o exemplo, são ignorados pelo Git.
+
+## Fase 8C — contrato de build e Pages
+
+`pnpm build` exige as duas variáveis públicas válidas antes de emitir o app. URL deve usar HTTPS e não conter credenciais/query/fragmento ou placeholders. A chave preferida é `sb_publishable_...`; JWT legado com `role=anon` continua aceito para compatibilidade, inclusive no E2E local. Não há verificação criptográfica ou garantia de que URL/chave pertencem ao mesmo projeto. Valores ausentes podem continuar desabilitando a integração defensivamente no desenvolvimento, mas nunca aprovam um build de release.
+
+O workflow fornece `vars.VITE_SUPABASE_URL` e `vars.VITE_SUPABASE_PUBLISHABLE_KEY` somente ao passo de build. Configure-as como repository variables públicas em uma etapa separada; o CI falhará enquanto faltarem. Nenhuma credencial de banco, CLI, SMTP, Resend ou service-role é necessária para o build. Não colocar outros secrets em variáveis `VITE_*`.
+
+`pnpm test:release-build` é reproduzível sem produção: usa fixtures públicas sintéticas, exige falha dos builds negativos, gera um build HTTPS configurado, verifica que `VITE_EXTRA_SECRET` sintética não entra no bundle e monta `_site`. O resultado sintético serve para validação, **não para publicação**. O verificador standalone exige o mesmo ambiente público usado no build e nunca imprime os valores.
+
+Para E2E contra Supabase exclusivamente local, o runner usa `vite build --mode local-test`; somente esse modo e o desenvolvimento aceitam HTTP em loopback. Para conferir esse artefato com o mesmo ambiente local, use `node scripts/verify-build.mjs --local`. O build normal mantém HTTPS obrigatório. O nome `local` é reservado pelo Vite e não é usado como mode.
+
+A montagem Pages usa allowlist de arquivos raiz, copia `assets/` integralmente e compara os bytes das cópias, mantendo Futebol somente em `_site/futebol/`. `robots.txt` e `.nojekyll` são preservados quando presentes; não são inventados nesta branch. Testes em fixtures cobrem a futura integração. Outros arquivos públicos novos precisam de revisão da allowlist.
+
+O scanner bloqueia padrões conhecidos de Supabase secret/service-role, JWT não anon identificável, tokens GitHub/Resend, URLs Postgres com senha e private keys. Literais usados para rejeição, como `"service_role"`, não são por si só credenciais. O scanner não detecta qualquer secret possível e não substitui a allowlist, revisão ou RLS.
+
+Release permanece **NOT READY**: confirmar/configurar as variables reais, confirmar Pages source, integrar `origin/main` preservando a raiz e obter autorização de deploy. O workflow automático de Pages pela branch pode operar independentemente de `ENABLE_PAGES_DEPLOY`; revisar a source antes de merge em main. Nenhuma dessas operações faz parte da implementação local 8C. Consulte `PHASE_8C_REPORT.md`.
 
 O client usa PKCE, persiste e renova sessões válidas e desativa a detecção automática do callback. O bootstrap troca `?code=...` por sessão e limpa a URL antes de montar o `HashRouter`.
 
