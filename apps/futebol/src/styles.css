@@ -818,3 +818,28 @@ h2 {
 .player-adjustments { display: flex; flex-wrap: wrap; gap: 0.65rem; }
 .player-adjustments .quiet-action { min-height: 32px; padding: 0; font-size: 0.82rem; }
 .adjustment-status { margin: 0; border-radius: 0.7rem; padding: 0.65rem; background: var(--green-100); color: var(--green-900); font-weight: 700; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.pwa-update { margin: 1rem; }
+.pwa-update p { margin: 0; }
+.form-fields { display: grid; min-width: 0; border: 0; padding: 0; margin: 0; gap: 15px; }
+:focus-visible { outline: 3px solid #087358; outline-offset: 3px; }
+button, input, select, .panel, .form-grid > label { min-width: 0; }
+button:disabled, a[aria-disabled="true"] { cursor: not-allowed; }
+.draw-player-option { display: flex; align-items: center; gap: 0.75rem; min-height: 48px; cursor: pointer; }
+.player-adjustments .quiet-action { min-height: 44px; }
+.check-row label { min-height: 44px; }
+.player-copy strong, .player-copy span, .player-copy small { white-space: normal; overflow-wrap: anywhere; }
+.close-action { width: 44px; height: 44px; }
+.match-history { padding: 1.25rem; }
+.game-flow-actions, .result-title, .section-title-row, .form-heading { flex-wrap: wrap; }
+.group-summary > div, .game-flow-heading > div, .result-title > div { min-width: 0; }
+.group-chip { max-width: min(80vw, 30rem); white-space: normal; overflow-wrap: anywhere; padding-block: 0.6rem; }
+.auth-form input, .data-form input, .data-form select { font-size: 1rem; }
+@media (max-width: 430px) {
+  .form-grid { grid-template-columns: minmax(0, 1fr); }
+  .game-flow-actions > button { width: 100%; }
+  .player-card { grid-template-columns: 40px minmax(0, 1fr); }
+  .player-card > button { grid-column: 2; justify-self: start; }
+  .player-avatar { width: 40px; height: 40px; }
+}

@@ -1,5 +1,6 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type { FutebolSupabaseClient } from '../lib/supabase/client'
+import { MatchModuleBoundary } from './MatchModuleBoundary'
 import {
   createGroup,
   createPlayer,
@@ -18,6 +19,7 @@ const MatchWorkspace = lazy(async () => ({ default: (await import('../matches/Ma
 interface GroupDashboardProps {
   client: FutebolSupabaseClient | null
   userId: string
+  onAttemptChange?: (pending: boolean) => void
 }
 
 const EMPTY_GROUP: GroupInput = { defaultPlayersOnCourt: 5, name: '', sport: 'futsal' }
@@ -40,7 +42,7 @@ const POSITION_LABELS: Record<PreferredPosition, string> = {
 
 const ROLE_LABELS = { owner: 'Proprietário', admin: 'Administrador', member: 'Membro' } as const
 
-export function GroupDashboard({ client, userId }: GroupDashboardProps) {
+export function GroupDashboard({ client, userId, onAttemptChange }: GroupDashboardProps) {
   const [groups, setGroups] = useState<GroupWithRole[]>([])
   const [players, setPlayers] = useState<Player[]>([])
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
@@ -50,6 +52,9 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
   const [showSettings, setShowSettings] = useState(false)
   const [editingPlayer, setEditingPlayer] = useState<Player | 'new' | null>(null)
   const [matchAttemptPending, setMatchAttemptPending] = useState(false)
+  const [formPending, setFormPending] = useState(false)
+  const navigationLocked = matchAttemptPending || formPending
+  useEffect(() => { onAttemptChange?.(navigationLocked) }, [navigationLocked, onAttemptChange])
 
   const refresh = useCallback(async (preferredGroupId?: string) => {
     if (!client) {
@@ -138,6 +143,7 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
             disabled={matchAttemptPending}
             client={client}
             initialValue={EMPTY_GROUP}
+            onBusyChange={setFormPending}
             onCancel={() => setShowGroupForm(false)}
             onSaved={async (groupId) => { setShowGroupForm(false); await refresh(groupId) }}
           />
@@ -155,10 +161,10 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
           <p className="eyebrow">Seus grupos</p>
           <h1>Quem joga hoje?</h1>
         </div>
-        <button className="icon-action" type="button" aria-label="Criar outro grupo" disabled={matchAttemptPending} onClick={() => setShowGroupForm((visible) => !visible)}>＋</button>
+        <button className="icon-action" type="button" aria-label="Criar outro grupo" disabled={navigationLocked} onClick={() => setShowGroupForm((visible) => !visible)}>＋</button>
       </section>
 
-      {error ? <p className="form-status" role="status">{error}</p> : null}
+      {error ? <p className="form-status" role="alert">{error}</p> : null}
 
       {showGroupForm ? (
         <section className="panel compact-panel" aria-label="Novo grupo">
@@ -166,21 +172,21 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
             disabled={matchAttemptPending}
             client={client}
             initialValue={EMPTY_GROUP}
+            onBusyChange={setFormPending}
             onCancel={() => setShowGroupForm(false)}
             onSaved={async (groupId) => { setShowGroupForm(false); await refresh(groupId) }}
           />
         </section>
       ) : null}
 
-      <div className="group-switcher" role="tablist" aria-label="Grupos">
+      <div className="group-switcher" role="group" aria-label="Grupos">
         {groups.map((group) => (
           <button
-            aria-selected={group.id === selectedGroupId}
-            disabled={matchAttemptPending}
+            aria-pressed={group.id === selectedGroupId}
+            disabled={navigationLocked}
             className={group.id === selectedGroupId ? 'group-chip selected' : 'group-chip'}
             key={group.id}
             onClick={() => { setSelectedGroupId(group.id); setEditingPlayer(null); setShowSettings(false) }}
-            role="tab"
             type="button"
           >
             {group.name}
@@ -197,7 +203,7 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
               <p>{selectedGroup.sport} · {selectedGroup.default_players_on_court} em quadra por time</p>
             </div>
             {selectedGroup.role === 'owner' ? (
-              <button className="quiet-action" type="button" onClick={() => setShowSettings((visible) => !visible)}>
+              <button className="quiet-action" type="button" disabled={navigationLocked} onClick={() => setShowSettings((visible) => !visible)}>
                 {showSettings ? 'Fechar ajustes' : 'Ajustar grupo'}
               </button>
             ) : null}
@@ -209,6 +215,7 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
             disabled={matchAttemptPending}
                 client={client}
                 groupId={selectedGroup.id}
+                onBusyChange={setFormPending}
                 initialValue={{
                   defaultPlayersOnCourt: selectedGroup.default_players_on_court,
                   name: selectedGroup.name,
@@ -220,9 +227,9 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
             </section>
           ) : null}
 
-          <Suspense fallback={<p role="status">Carregando partidas…</p>}>
+          <MatchModuleBoundary key={selectedGroup.id}><Suspense fallback={<p role="status">Carregando partidas…</p>}>
             <MatchWorkspace key={selectedGroup.id} client={client} group={selectedGroup} players={selectedPlayers} onAttemptChange={setMatchAttemptPending} />
-          </Suspense>
+          </Suspense></MatchModuleBoundary>
 
           <section className="players-section">
             <div className="section-title-row">
@@ -231,7 +238,7 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
                 <h2>{selectedPlayers.filter((player) => player.active).length} jogadores ativos</h2>
               </div>
               {canManagePlayers ? (
-                <button className="solid-action small-action" type="button" onClick={() => setEditingPlayer('new')}>Adicionar</button>
+                <button className="solid-action small-action" type="button" disabled={formPending} onClick={() => setEditingPlayer('new')}>Adicionar</button>
               ) : null}
             </div>
 
@@ -243,6 +250,7 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
                   groupId={selectedGroup.id}
                   initialValue={editingPlayer === 'new' ? EMPTY_PLAYER : playerToInput(editingPlayer)}
                   playerId={editingPlayer === 'new' ? undefined : editingPlayer.id}
+                  onBusyChange={setFormPending}
                   onCancel={() => setEditingPlayer(null)}
                   onSaved={async () => { setEditingPlayer(null); await refresh(selectedGroup.id) }}
                 />
@@ -265,7 +273,7 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
                       <small>{player.is_goalkeeper ? 'Goleiro · ' : ''}Nível {Number(player.skill_rating).toFixed(1)}{player.active ? '' : ' · Inativo'}</small>
                     </div>
                     {canManagePlayers ? (
-                      <button className="quiet-action" type="button" onClick={() => setEditingPlayer(player)}>Editar</button>
+                      <button className="quiet-action" type="button" disabled={formPending} onClick={() => setEditingPlayer(player)}>Editar</button>
                     ) : null}
                   </li>
                 ))}
@@ -278,22 +286,26 @@ export function GroupDashboard({ client, userId }: GroupDashboardProps) {
   )
 }
 
-function GroupForm({ client, groupId, initialValue, onCancel, onSaved, disabled = false }: {
+function GroupForm({ client, groupId, initialValue, onCancel, onSaved, disabled = false, onBusyChange }: {
   client: FutebolSupabaseClient | null
   groupId?: string
   disabled?: boolean
   initialValue: GroupInput
   onCancel: () => void
   onSaved: (groupId?: string) => Promise<void>
+  onBusyChange?: (pending: boolean) => void
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const submitting = useRef(false)
+  const status = useRef<HTMLParagraphElement>(null)
+  useEffect(() => { if (error) status.current?.focus() }, [error])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (busy || disabled) return
+    if (submitting.current || disabled) return
     if (!client) return setError('A conexão com o Supabase não está configurada.')
-    setBusy(true)
+    submitting.current = true; setBusy(true); onBusyChange?.(true)
     setError(null)
     const form = new FormData(event.currentTarget)
     const input: GroupInput = {
@@ -307,39 +319,44 @@ function GroupForm({ client, groupId, initialValue, onCancel, onSaved, disabled 
     } catch {
       setError('Não foi possível salvar o grupo. Confira os dados e tente novamente.')
     } finally {
-      setBusy(false)
+      submitting.current = false; setBusy(false); onBusyChange?.(false)
     }
   }
 
   return (
-    <form className="data-form" onSubmit={(event) => void handleSubmit(event)}>
-      <div className="form-heading"><h2>{groupId ? 'Ajustes do grupo' : 'Novo grupo'}</h2><button type="button" className="close-action" aria-label="Fechar" onClick={onCancel}>×</button></div>
+    <form className="data-form" aria-busy={busy} onSubmit={(event) => void handleSubmit(event)}><fieldset className="form-fields" disabled={busy}>
+      <div className="form-heading"><h2>{groupId ? 'Ajustes do grupo' : 'Novo grupo'}</h2><button type="button" className="close-action" aria-label="Fechar" disabled={busy} onClick={onCancel}>×</button></div>
       <label>Nome<input name="name" defaultValue={initialValue.name} minLength={2} maxLength={80} required autoFocus /></label>
       <div className="form-grid">
         <label>Esporte<input name="sport" defaultValue={initialValue.sport} minLength={2} maxLength={40} required /></label>
         <label>Por time<input name="defaultPlayersOnCourt" defaultValue={initialValue.defaultPlayersOnCourt} type="number" min="1" max="20" required /></label>
       </div>
-      {error ? <p className="form-status" role="status">{error}</p> : null}
+      {error ? <p ref={status} tabIndex={-1} className="form-status" role="alert">{error}</p> : null}
       <button className="solid-action" type="submit" disabled={busy || disabled}>{busy ? 'Salvando…' : 'Salvar grupo'}</button>
-    </form>
+    </fieldset></form>
   )
 }
 
-function PlayerForm({ client, groupId, initialValue, playerId, onCancel, onSaved }: {
+function PlayerForm({ client, groupId, initialValue, playerId, onCancel, onSaved, onBusyChange }: {
   client: FutebolSupabaseClient | null
   groupId: string
   initialValue: PlayerInput
   playerId?: string
   onCancel: () => void
   onSaved: () => Promise<void>
+  onBusyChange: (pending: boolean) => void
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const submitting = useRef(false)
+  const status = useRef<HTMLParagraphElement>(null)
+  useEffect(() => { if (error) status.current?.focus() }, [error])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (submitting.current) return
     if (!client) return setError('A conexão com o Supabase não está configurada.')
-    setBusy(true)
+    submitting.current = true; setBusy(true); onBusyChange(true)
     setError(null)
     const form = new FormData(event.currentTarget)
     const position = readString(form, 'preferredPosition')
@@ -358,26 +375,26 @@ function PlayerForm({ client, groupId, initialValue, playerId, onCancel, onSaved
     } catch {
       setError('Não foi possível salvar o jogador. Confira os dados e tente novamente.')
     } finally {
-      setBusy(false)
+      submitting.current = false; setBusy(false); onBusyChange(false)
     }
   }
 
   return (
-    <form className="data-form" onSubmit={(event) => void handleSubmit(event)}>
-      <div className="form-heading"><h2>{playerId ? 'Editar jogador' : 'Novo jogador'}</h2><button type="button" className="close-action" aria-label="Fechar" onClick={onCancel}>×</button></div>
+    <form className="data-form" aria-busy={busy} onSubmit={(event) => void handleSubmit(event)}><fieldset className="form-fields" disabled={busy}>
+      <div className="form-heading"><h2>{playerId ? 'Editar jogador' : 'Novo jogador'}</h2><button type="button" className="close-action" aria-label="Fechar" disabled={busy} onClick={onCancel}>×</button></div>
       <label>Nome<input name="name" defaultValue={initialValue.name} minLength={2} maxLength={80} required autoFocus /></label>
       <label>Apelido <span>(opcional)</span><input name="nickname" defaultValue={initialValue.nickname ?? ''} maxLength={40} /></label>
       <div className="form-grid">
-        <label>Nível<select name="skillRating" defaultValue={initialValue.skillRating}>{skillOptions()}</select></label>
-        <label>Posição<select name="preferredPosition" defaultValue={initialValue.preferredPosition ?? ''}><option value="">Sem preferência</option>{Object.entries(POSITION_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+        <label>Nível<select aria-label="Nível" name="skillRating" defaultValue={initialValue.skillRating}>{skillOptions()}</select></label>
+        <label>Posição<select aria-label="Posição" name="preferredPosition" defaultValue={initialValue.preferredPosition ?? ''}><option value="">Sem preferência</option>{Object.entries(POSITION_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
       </div>
       <div className="check-row">
         <label><input type="checkbox" name="isGoalkeeper" defaultChecked={initialValue.isGoalkeeper} /> É goleiro</label>
         <label><input type="checkbox" name="active" defaultChecked={initialValue.active} /> Jogador ativo</label>
       </div>
-      {error ? <p className="form-status" role="status">{error}</p> : null}
+      {error ? <p ref={status} tabIndex={-1} className="form-status" role="alert">{error}</p> : null}
       <button className="solid-action" type="submit" disabled={busy}>{busy ? 'Salvando…' : 'Salvar jogador'}</button>
-    </form>
+    </fieldset></form>
   )
 }
 

@@ -58,5 +58,13 @@ function parseSupabaseUrl(value: string): URL {
 
 function isSecretKey(key: string): boolean {
   const normalizedKey = key.toLowerCase()
-  return normalizedKey.startsWith('sb_secret_') || normalizedKey.includes('service_role')
+  if (normalizedKey.startsWith('sb_secret_') || normalizedKey.includes('service_role')) return true
+  // Legacy keys encode the role in the JWT payload, not in the literal key.
+  if (key.split('.').length === 3) {
+    try {
+      const payload: unknown = JSON.parse(atob(key.split('.')[1]!.replace(/-/g, '+').replace(/_/g, '/')))
+      return typeof payload !== 'object' || payload === null || !('role' in payload) || payload.role !== 'anon'
+    } catch { return true }
+  }
+  return false
 }

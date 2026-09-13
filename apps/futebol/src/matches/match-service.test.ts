@@ -8,6 +8,20 @@ function query(data: unknown, error: unknown = null) {
   return q
 }
 describe('match-service', () => {
+  it('rejeita grafos historicamente corrompidos mesmo com contagens corretas', async () => {
+    const variants = [
+      { teams: saved.teams.map((t) => ({ ...t, team_index: 9 })) },
+      { draw_runs: saved.runs.map((r) => ({ ...r, run_number: 2 })) },
+      { team_assignments: saved.assignments.map((a) => ({ ...a, starts_as_reserve: true })) },
+      { team_assignments: saved.assignments.map((a) => ({ ...a, team_id: saved.teams[0]!.id })) },
+      { match_players: saved.participants.map((p) => ({ ...p, attendance_status: 'absent' })) },
+    ]
+    for (const variant of variants) {
+      const data = { matches: saved.match, match_players: saved.participants, teams: saved.teams, team_assignments: saved.assignments, draw_runs: saved.runs, ...variant }
+      const client = { from: vi.fn((name: keyof typeof data) => query(data[name])) } as unknown as FutebolSupabaseClient
+      await expect(loadSavedMatch(client, group.id, matchId)).rejects.toThrow('incompleto')
+    }
+  })
   it('salva exclusivamente pela RPC e exige o ID correto na resposta', async () => {
     const response = vi.fn().mockResolvedValue({ data: matchId, error: null })
     const rpc = vi.fn(() => ({ abortSignal: response })), from = vi.fn()

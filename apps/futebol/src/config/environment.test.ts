@@ -30,4 +30,11 @@ describe('getSupabaseEnvironment', () => {
       VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_secret_do-not-use',
     })).toThrow(/chave pública/i)
   })
+  it('rejeita service_role codificado como JWT e aceita somente role anon legado', () => {
+    const legacy = (role: string) => `eyJhbGciOiJIUzI1NiJ9.${btoa(JSON.stringify({ role }))}.synthetic-signature`
+    const env = { VITE_SUPABASE_URL: 'http://127.0.0.1:54321', VITE_SUPABASE_PUBLISHABLE_KEY: legacy('service_role') }
+    expect(() => getSupabaseEnvironment(env)).toThrow(/chave pública/i)
+    expect(() => getSupabaseEnvironment({ ...env, VITE_SUPABASE_PUBLISHABLE_KEY: legacy('authenticated') })).toThrow(/chave pública/i)
+    expect(getSupabaseEnvironment({ ...env, VITE_SUPABASE_PUBLISHABLE_KEY: legacy('anon') })?.url).toBe('http://127.0.0.1:54321')
+  })
 })

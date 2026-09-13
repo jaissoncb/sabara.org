@@ -12,6 +12,8 @@ export function MatchHistory({ client, group, selectedId, onSelect }: { client: 
 }
 
 function HistoryList({ client, groupId, onSelect }: { client: FutebolSupabaseClient | null; groupId: string; onSelect: (id: string) => void }) {
+  const list = useRef<HTMLDivElement>(null)
+  useEffect(() => { list.current?.focus() }, [])
   const [rows, setRows] = useState<Tables<'matches'>[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -32,7 +34,7 @@ function HistoryList({ client, groupId, onSelect }: { client: FutebolSupabaseCli
     })
     return () => { cancelled = true }
   }, [client, groupId, page, revision])
-  return <div aria-busy={loading}>
+  return <div ref={list} tabIndex={-1} aria-label="Lista de partidas" aria-busy={loading}>
     {loading ? <p role="status">Carregando histórico…</p> : null}
     {error ? <div role="alert"><p>Não foi possível carregar o histórico.</p><button className="quiet-action" onClick={() => setRevision((n) => n + 1)}>Tentar novamente</button></div> : null}
     {!loading && !error && !rows.length ? <p>Nenhuma partida salva neste grupo.</p> : null}
@@ -42,6 +44,7 @@ function HistoryList({ client, groupId, onSelect }: { client: FutebolSupabaseCli
 }
 
 function MatchDetail({ client, groupId, id, onBack }: { client: FutebolSupabaseClient | null; groupId: string; id: string; onBack: () => void }) {
+  const detail = useRef<HTMLElement>(null)
   const [saved, setSaved] = useState<SavedMatch | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -49,6 +52,7 @@ function MatchDetail({ client, groupId, id, onBack }: { client: FutebolSupabaseC
   const [sharing, setSharing] = useState(false)
   const [shareNotice, setShareNotice] = useState<string | null>(null)
   const shareLock = useRef(false)
+  useEffect(() => { detail.current?.focus() }, [loading, error])
   useEffect(() => {
     let cancelled = false
     void Promise.resolve().then(async () => {
@@ -72,7 +76,7 @@ function MatchDetail({ client, groupId, id, onBack }: { client: FutebolSupabaseC
     } catch { setShareNotice('Não foi possível compartilhar ou copiar. Tente novamente.') }
     finally { shareLock.current = false; setSharing(false) }
   }
-  return <section aria-label="Partida salva" aria-busy={loading}>
+  return <section ref={detail} tabIndex={-1} aria-label="Partida salva" aria-busy={loading}>
     <button className="quiet-action" onClick={onBack}>Voltar ao histórico</button>
     {loading ? <p role="status">Carregando partida…</p> : error ? <div role="alert"><p>Não foi possível carregar a partida salva. Ela pode estar indisponível ou incompleta.</p><button className="quiet-action" onClick={() => setRevision((n) => n + 1)}>Tentar novamente</button></div> : saved ? <>
       <h3>{saved.match.name || 'Partida sem nome'}</h3>
@@ -82,8 +86,8 @@ function MatchDetail({ client, groupId, id, onBack }: { client: FutebolSupabaseC
         const p = saved.participants.find((p) => p.player_id === a.player_id)!
         return <li key={p.player_id}>{p.player_nickname_snapshot || p.player_name_snapshot}{p.player_nickname_snapshot ? ` (${p.player_name_snapshot})` : ''} · Nível {Number(p.skill_rating_snapshot).toFixed(1)}{p.is_goalkeeper_snapshot ? ' · Goleiro' : ''}{p.preferred_position_snapshot ? ` · ${POSITION_LABELS[p.preferred_position_snapshot]}` : ''}{a.assignment_source === 'manual' ? ' · Ajuste manual' : ''}</li>
       })}</ul>{!saved.assignments.some((a) => a.team_id === team.id && a.starts_as_reserve === reserve) ? <p>Nenhum</p> : null}</section>)}</article>)}</div>
-      <details className="saved-draw-data"><summary>Histórico dos sorteios ({saved.runs.length})</summary><ol>{saved.runs.map((run) => <li key={run.id}>Sorteio {run.run_number}{run.accepted ? ' · Aceito (sorteio-base)' : ' · Não aceito'}<br />Seed: <code>{run.seed}</code><br />Algoritmo: <code>{run.algorithm_version}</code> · Score: {Number(run.balance_score).toFixed(3)}</li>)}</ol></details>
-      <p className="game-flow-note">A escalação acima é o resultado final salvo, incluindo ajustes manuais. A seed representa o sorteio-base.</p>
+      <details className="saved-draw-data"><summary>Informações dos sorteios ({saved.runs.length})</summary><ol>{saved.runs.map((run) => <li key={run.id}>Sorteio {run.run_number}{run.accepted ? ' · Aceito (sorteio-base)' : ' · Não aceito'}<br />Código do sorteio: <code>{run.seed}</code><br />Versão: <code>{run.algorithm_version}</code> · Diferença entre médias: {Number(run.balance_score).toFixed(3)}</li>)}</ol></details>
+      <p className="game-flow-note">A escalação acima é o resultado final salvo, incluindo ajustes manuais. O código identifica o sorteio-base.</p>
       <button className="solid-action" disabled={sharing} onClick={() => void share()}>{sharing ? 'Compartilhando…' : 'Compartilhar resultado'}</button>
       {shareNotice ? <p role="status">{shareNotice}</p> : null}
     </> : null}

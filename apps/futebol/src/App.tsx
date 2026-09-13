@@ -1,25 +1,36 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
-import { HashRouter, Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { HashRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthProvider'
 import { useAuth } from './auth/auth-context'
 import type { BootstrapContext } from './bootstrap/auth-pkce'
 import { GroupDashboard } from './groups/GroupDashboard'
+import { PwaUpdate } from './PwaUpdate'
 
 interface AppProps {
   bootstrap: BootstrapContext
 }
 
 export function AppRoutes({ bootstrap }: AppProps) {
+  const { session } = useAuth()
+  const [attempt, setAttempt] = useState<{ userId: string; pending: boolean } | null>(null)
+  const pending = attempt?.userId === session?.user.id && !!attempt?.pending
+  const userId = session?.user.id ?? ''
+  const onAttemptChange = useCallback((pending: boolean) => {
+    setAttempt((current) => current?.userId === userId && current.pending === pending ? current : { userId, pending })
+  }, [userId])
+  const location = useLocation()
+  const navigate = useNavigate()
+  useEffect(() => { if (pending && location.pathname !== '/') void navigate('/', { replace: true }) }, [pending, location.pathname, navigate])
   return (
-    <Routes>
-      <Route path="/" element={<HomePage bootstrap={bootstrap} />} />
-      <Route path="/login" element={<LoginPage />} />
+    <><PwaUpdate pending={pending} /><Routes location={pending ? '/' : location}>
+      <Route path="/" element={<HomePage bootstrap={bootstrap} attemptPending={pending} onAttemptChange={onAttemptChange} />} />
+      <Route path="/login" element={<LoginPage message={bootstrap.message} />} />
       <Route path="/cadastro" element={<SignUpPage />} />
       <Route path="/esqueci-senha" element={<RecoveryPage />} />
       <Route path="/nova-senha" element={<NewPasswordPage />} />
       <Route path="/conta" element={<AccountPage />} />
       <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+    </Routes></>
   )
 }
 
@@ -33,7 +44,7 @@ export function App({ bootstrap }: AppProps) {
   )
 }
 
-function HomePage({ bootstrap }: AppProps) {
+function HomePage({ bootstrap, onAttemptChange, attemptPending }: AppProps & { attemptPending: boolean; onAttemptChange: (pending: boolean) => void }) {
   const { session } = useAuth()
 
   return (
@@ -43,7 +54,7 @@ function HomePage({ bootstrap }: AppProps) {
           <span className="brand-mark" aria-hidden="true">⚽</span>
           <span>Futebol</span>
         </a>
-        {session ? <Link className="topbar-link" to="/conta">Conta</Link> : <Link className="topbar-link" to="/login">Entrar</Link>}
+        {session ? <Link className="topbar-link" to="/conta" onClick={(event) => { if (attemptPending) event.preventDefault() }} aria-disabled={attemptPending}>Conta</Link> : <Link className="topbar-link" to="/login">Entrar</Link>}
       </header>
 
       <main className="main-content">
@@ -52,7 +63,7 @@ function HomePage({ bootstrap }: AppProps) {
         ) : null}
 
         {session ? (
-          <GroupDashboard key={session.user.id} client={bootstrap.client} userId={session.user.id} />
+          <GroupDashboard key={session.user.id} client={bootstrap.client} userId={session.user.id} onAttemptChange={onAttemptChange} />
         ) : (
           <>
             <section className="hero-card" aria-labelledby="hero-title">
@@ -64,18 +75,18 @@ function HomePage({ bootstrap }: AppProps) {
             <Link className="primary-action" to="/login">
               Entrar para começar <span aria-hidden="true">→</span>
             </Link>
-              <p className="helper-text">Partidas e sorteios serão habilitados em uma fase posterior.</p>
+              <p className="helper-text">Salve as partidas e consulte os times no histórico do seu grupo.</p>
             </section>
 
             <section className="foundation" aria-labelledby="foundation-title">
               <div>
-                <p className="eyebrow">Base preparada</p>
+                <p className="eyebrow">Futebol entre amigos</p>
                 <h2 id="foundation-title">Rápida, instalável e feita para celular.</h2>
               </div>
               <ul className="feature-list">
-                <li><span aria-hidden="true">✓</span> Navegação segura no GitHub Pages</li>
-                <li><span aria-hidden="true">✓</span> PWA limitada a /futebol/</li>
-                <li><span aria-hidden="true">✓</span> Retorno PKCE antes das rotas</li>
+                <li><span aria-hidden="true">✓</span> Elenco organizado por grupo</li>
+                <li><span aria-hidden="true">✓</span> Dois ou três times equilibrados</li>
+                <li><span aria-hidden="true">✓</span> Histórico e compartilhamento dos times</li>
               </ul>
             </section>
           </>
@@ -87,20 +98,25 @@ function HomePage({ bootstrap }: AppProps) {
   )
 }
 
-function LoginPage() {
+function LoginPage({ message }: { message: string | null }) {
   const { session, signIn } = useAuth()
   const navigate = useNavigate()
-  const [status, setStatus] = useState<string | null>(null)
+  const [status, setStatus] = useState<string | null>(message)
   const [busy, setBusy] = useState(false)
+  const submitting = useRef(false)
 
   if (session) return <Navigate to="/" replace />
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (submitting.current) return
+    submitting.current = true
+    setStatus(null)
     setBusy(true)
     const form = new FormData(event.currentTarget)
     const result = await signIn(readFormString(form, 'email'), readFormString(form, 'password'))
     setBusy(false)
+    submitting.current = false
     setStatus(result.error)
     if (!result.error) void navigate('/')
   }
@@ -126,11 +142,15 @@ function SignUpPage() {
   const [status, setStatus] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [busy, setBusy] = useState(false)
+  const submitting = useRef(false)
 
   if (session) return <Navigate to="/" replace />
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (submitting.current) return
+    submitting.current = true
+    setStatus(null)
     setBusy(true)
     const form = new FormData(event.currentTarget)
     const result = await signUp({
@@ -139,12 +159,13 @@ function SignUpPage() {
       password: readFormString(form, 'password'),
     })
     setBusy(false)
+    submitting.current = false
     setStatus(result.error)
     setSuccess(!result.error)
   }
 
   return (
-    <AuthPage title="Crie sua conta" description="Você receberá uma confirmação por e-mail se ela estiver habilitada no projeto.">
+    <AuthPage title="Crie sua conta" description="Cadastre seus dados para organizar o futebol com os amigos.">
       <form className="auth-form" onSubmit={(event) => void handleSubmit(event)}>
         <label>Nome<input name="displayName" autoComplete="name" minLength={2} maxLength={80} required /></label>
         <EmailField />
@@ -162,13 +183,18 @@ function RecoveryPage() {
   const [status, setStatus] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [busy, setBusy] = useState(false)
+  const submitting = useRef(false)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (submitting.current) return
+    submitting.current = true
+    setStatus(null)
     setBusy(true)
     const form = new FormData(event.currentTarget)
     const result = await sendPasswordRecovery(readFormString(form, 'email'))
     setBusy(false)
+    submitting.current = false
     setStatus(result.error)
     setSuccess(!result.error)
   }
@@ -190,13 +216,18 @@ function NewPasswordPage() {
   const navigate = useNavigate()
   const [status, setStatus] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const submitting = useRef(false)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (submitting.current) return
+    submitting.current = true
+    setStatus(null)
     setBusy(true)
     const form = new FormData(event.currentTarget)
     const result = await updatePassword(readFormString(form, 'password'))
     setBusy(false)
+    submitting.current = false
     setStatus(result.error)
     if (!result.error) void navigate('/conta')
   }
@@ -221,10 +252,13 @@ function AccountPage() {
   const navigate = useNavigate()
   const [status, setStatus] = useState<string | null>(null)
 
+  const signingOut = useRef(false)
   if (!session) return <Navigate to="/login" replace />
-
   async function handleSignOut() {
+    if (signingOut.current) return
+    signingOut.current = true
     const result = await signOut()
+    signingOut.current = false
     setStatus(result.error)
     if (!result.error) void navigate('/login')
   }
@@ -238,11 +272,13 @@ function AccountPage() {
 }
 
 function AuthPage({ children, description, title }: { children: ReactNode; description: string; title: string }) {
+  const heading = useRef<HTMLHeadingElement>(null)
+  useEffect(() => { heading.current?.focus() }, [title])
   return (
     <main className="auth-page">
       <Link className="brand" to="/" aria-label="Futebol - início"><span className="brand-mark" aria-hidden="true">⚽</span><span>Futebol</span></Link>
       <section className="auth-card">
-        <h1>{title}</h1>
+        <h1 ref={heading} tabIndex={-1}>{title}</h1>
         <p>{description}</p>
         {children}
       </section>
@@ -259,7 +295,9 @@ function PasswordField({ autoComplete }: { autoComplete: 'current-password' | 'n
 }
 
 function FormStatus({ message, success = false }: { message: string | null; success?: boolean }) {
-  return message ? <p className={success ? 'form-status success' : 'form-status'} role="status">{message}</p> : null
+  const status = useRef<HTMLParagraphElement>(null)
+  useEffect(() => { if (message && !success) status.current?.focus() }, [message, success])
+  return message ? <p ref={status} tabIndex={-1} className={success ? 'form-status success' : 'form-status'} role={success ? 'status' : 'alert'}>{message}</p> : null
 }
 
 function SubmitButton({ busy, children }: { busy: boolean; children: ReactNode }) {
@@ -276,7 +314,7 @@ function NotFoundPage() {
     <main className="standalone-message">
       <span className="brand-mark" aria-hidden="true">⚽</span>
       <h1>Esta tela ainda não existe.</h1>
-      <p>Volte para o inicio da aplicacao.</p>
+      <p>Volte para o início da aplicação.</p>
       <Link className="text-link" to="/">Ir para o início</Link>
     </main>
   )

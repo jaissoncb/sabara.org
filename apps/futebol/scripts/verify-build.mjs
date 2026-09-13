@@ -1,5 +1,6 @@
-import { access, readFile } from 'node:fs/promises'
+import { access, readFile, readdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { assertPublicBundle } from './bundle-security.mjs'
 
 const dist = resolve(import.meta.dirname, '..', 'dist')
 const manifestPath = resolve(dist, 'manifest.webmanifest')
@@ -23,4 +24,7 @@ if (!index.includes('/futebol/assets/')) {
   throw new Error('O build nao aplicou base /futebol/ aos assets.')
 }
 
-console.log('Build verificado: base, manifest, scope e service worker estao limitados a /futebol/.')
+for (const file of await readdir(dist, { recursive: true })) {
+  if (/\.(js|map|html|webmanifest)$/.test(file)) assertPublicBundle(await readFile(resolve(dist, file), 'utf8'))
+}
+console.log('Build verificado: base /futebol/, manifest, scope, service worker e ausência de credenciais privilegiadas.')

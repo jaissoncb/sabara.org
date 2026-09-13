@@ -30,7 +30,7 @@ export function AuthProvider({ children, client, initialSession }: AuthProviderP
     session: client ? session : null,
     async signUp({ displayName, email, password }: SignUpCredentials): Promise<AuthActionResult> {
       if (!client) return { error: NOT_CONFIGURED }
-      const { error } = await client.auth.signUp({
+      return safeAction(async () => { const { error } = await client.auth.signUp({
         email,
         password,
         options: {
@@ -38,33 +38,38 @@ export function AuthProvider({ children, client, initialSession }: AuthProviderP
           emailRedirectTo: `${window.location.origin}/futebol/`,
         },
       })
-      return { error: error ? friendlyAuthError(error.code, 'cadastro') : null }
+      return { error: error ? friendlyAuthError(error.code, 'cadastro') : null } })
     },
     async signIn(email: string, password: string): Promise<AuthActionResult> {
       if (!client) return { error: NOT_CONFIGURED }
-      const { error } = await client.auth.signInWithPassword({ email, password })
-      return { error: error ? friendlyAuthError(error.code, 'login') : null }
+      return safeAction(async () => { const { error } = await client.auth.signInWithPassword({ email, password })
+      return { error: error ? friendlyAuthError(error.code, 'login') : null } })
     },
     async signOut(): Promise<AuthActionResult> {
       if (!client) return { error: NOT_CONFIGURED }
-      const { error } = await client.auth.signOut({ scope: 'local' })
-      return { error: error ? 'Não foi possível sair agora. Tente novamente.' : null }
+      return safeAction(async () => { const { error } = await client.auth.signOut({ scope: 'local' })
+      return { error: error ? 'Não foi possível sair agora. Tente novamente.' : null } })
     },
     async sendPasswordRecovery(email: string): Promise<AuthActionResult> {
       if (!client) return { error: NOT_CONFIGURED }
-      const { error } = await client.auth.resetPasswordForEmail(email, {
+      return safeAction(async () => { const { error } = await client.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/futebol/`,
       })
-      return { error: error ? friendlyAuthError(error.code, 'recuperacao') : null }
+      return { error: error ? friendlyAuthError(error.code, 'recuperacao') : null } })
     },
     async updatePassword(password: string): Promise<AuthActionResult> {
       if (!client) return { error: NOT_CONFIGURED }
-      const { error } = await client.auth.updateUser({ password })
-      return { error: error ? friendlyAuthError(error.code, 'senha') : null }
+      return safeAction(async () => { const { error } = await client.auth.updateUser({ password })
+      return { error: error ? friendlyAuthError(error.code, 'senha') : null } })
     },
   }), [client, session])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
+
+async function safeAction(action: () => Promise<AuthActionResult>): Promise<AuthActionResult> {
+  try { return await action() }
+  catch { return { error: 'Não foi possível concluir. Confira a conexão e tente novamente.' } }
 }
 
 function friendlyAuthError(code: string | undefined, operation: string): string {

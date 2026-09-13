@@ -53,6 +53,14 @@ describe('cleanAuthCallbackUrl', () => {
 })
 
 describe('bootstrapApplication', () => {
+  it('mantém o aplicativo utilizável se a restauração da sessão lançar erro de rede', async () => {
+    const client = createClientMock()
+    client.auth.getSession = vi.fn().mockRejectedValue(new Error('private network error'))
+    const context = await bootstrapApplication(new URL('https://sabara.org/futebol/'), { client })
+    expect(context.session).toBeNull()
+    expect(context.message).toMatch(/Confira a conexão/)
+    expect(context.message).not.toContain('private')
+  })
   it('troca o code antes de limpar a URL e disponibilizar a sessão', async () => {
     const order: string[] = []
     const exchanged: unknown[] = []

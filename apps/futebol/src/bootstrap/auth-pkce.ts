@@ -151,12 +151,11 @@ export async function bootstrapApplication(
     }
   }
 
-  const { data, error } = await client.auth.getSession()
-  return {
-    authCallback,
-    client,
-    message: error ? 'Não foi possível restaurar sua sessão.' : null,
-    session: data.session,
+  try {
+    const { data, error } = await client.auth.getSession()
+    return { authCallback, client, message: error ? 'Não foi possível restaurar sua sessão. Entre novamente.' : null, session: error ? null : data.session }
+  } catch {
+    return { authCallback, client, message: 'Não foi possível restaurar sua sessão. Confira a conexão e entre novamente.', session: null }
   }
 }
 

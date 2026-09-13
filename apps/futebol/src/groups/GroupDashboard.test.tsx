@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { GroupDashboard } from './GroupDashboard'
 import * as service from './group-service'
@@ -38,8 +38,26 @@ it('cria o primeiro grupo e seleciona o resultado', async () => {
   await user.click(await screen.findByRole('button', { name: 'Criar grupo' }))
   await user.type(screen.getByLabelText('Nome'), 'Quarta')
   await user.click(screen.getByRole('button', { name: 'Salvar grupo' }))
-  expect(await screen.findByRole('tab', { name: 'Quarta' })).toHaveAttribute('aria-selected', 'true')
+  expect(await screen.findByRole('button', { name: 'Quarta' })).toHaveAttribute('aria-pressed', 'true')
   expect(service.createGroup).toHaveBeenCalledWith(client, { name: 'Quarta', sport: 'futsal', defaultPlayersOnCourt: 5 })
+})
+
+it('bloqueia submits repetidos e troca de formulário/grupo durante a gravação do jogador', async () => {
+  const user = userEvent.setup()
+  let resolve!: () => void
+  vi.mocked(service.createPlayer).mockImplementation(() => new Promise<void>((done) => { resolve = done }))
+  vi.mocked(service.loadGroupWorkspace).mockResolvedValue({ groups: [group, { ...group, id: 'b', name: 'Outro grupo' }], players: [player] })
+  render(<GroupDashboard client={client} userId="user" />)
+  await user.click(await screen.findByRole('button', { name: 'Adicionar' }))
+  await user.type(screen.getByLabelText('Nome'), 'Duplicidade sintética')
+  const form = screen.getByRole('button', { name: 'Salvar jogador' }).closest('form')!
+  fireEvent.submit(form); fireEvent.submit(form)
+  expect(service.createPlayer).toHaveBeenCalledOnce()
+  expect(screen.getByRole('button', { name: 'Outro grupo' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Fechar' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Adicionar' })).toBeDisabled()
+  await act(async () => { resolve(); await Promise.resolve() })
+  expect(await screen.findByRole('button', { name: 'Outro grupo' })).toBeEnabled()
 })
 
 it.each(['member', 'admin'] as const)('respeita os controles do papel %s', async (role) => {
@@ -73,7 +91,7 @@ it('preserva dados digitados após falha ao salvar sem exibir detalhes do servid
   await user.click(await screen.findByRole('button', { name: 'Adicionar' }))
   await user.type(screen.getByLabelText('Nome'), 'Carla')
   await user.click(screen.getByRole('button', { name: 'Salvar jogador' }))
-  expect(await screen.findByRole('status')).toHaveTextContent('Não foi possível salvar o jogador')
+  expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível salvar o jogador')
   expect(screen.getByLabelText('Nome')).toHaveValue('Carla')
   expect(screen.queryByText('private server detail')).not.toBeInTheDocument()
 })
@@ -120,7 +138,7 @@ it('preserva retry durante recarga do elenco e bloqueia troca de grupo enquanto 
   await user.click(screen.getByRole('button', { name: 'Salvar e aceitar sorteio' }))
   await screen.findByRole('alert')
   const first = vi.mocked(matches.saveMatchDraw).mock.calls[0]!
-  expect(screen.getByRole('tab', { name: 'Outro grupo' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Outro grupo' })).toBeDisabled()
   expect(screen.getByRole('button', { name: 'Salvar grupo' })).toBeDisabled()
   const roster = screen.getByText('2 jogadores ativos').closest('section')!
   await user.click(within(roster).getAllByRole('button', { name: 'Editar' })[0]!)
@@ -128,7 +146,7 @@ it('preserva retry durante recarga do elenco e bloqueia troca de grupo enquanto 
   expect(await screen.findByRole('button', { name: 'Tentar salvar novamente' })).toBeEnabled()
   await user.click(screen.getByRole('button', { name: 'Tentar salvar novamente' }))
   await screen.findByText(/Partida salva e sorteio aceito/)
-  expect(screen.getByRole('tab', { name: 'Outro grupo' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: 'Outro grupo' })).toBeEnabled()
   expect(vi.mocked(matches.saveMatchDraw).mock.calls[1]![1]).toBe(first[1])
   expect(vi.mocked(matches.saveMatchDraw).mock.calls[1]![2]).toBe(first[2])
 })

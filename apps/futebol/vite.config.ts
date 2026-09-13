@@ -9,8 +9,8 @@ export default defineConfig({
     VitePWA({
       base: '/futebol/',
       scope: '/futebol/',
-      registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      registerType: 'prompt',
+      injectRegister: null,
       includeAssets: ['icons/app-icon.svg', 'icons/app-icon-512.png'],
       manifest: {
         id: '/futebol/',

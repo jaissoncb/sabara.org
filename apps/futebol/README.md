@@ -29,7 +29,18 @@ pnpm typecheck
 pnpm test
 pnpm build
 node scripts/test-draw-contract.mjs
+pnpm test:e2e
+pnpm test:bundle-security
+node scripts/audit-bundle.mjs
 ```
+
+## Fase 8 — hardening e auditoria de release
+
+O checkpoint está **NOT READY**: escritas diretas permitidas a owner/admin podem contornar os invariantes da RPC de partidas. Consulte `PHASE_8_REPORT.md` para a reprodução, resultados e pendências. Nenhuma migration ou configuração remota foi alterada nesta fase.
+
+O E2E usa Auth, Data API e Postgres **locais**, após reset e pgTAP. Requer Docker no PATH, CLI Supabase 2.117.0 e Chrome instalado; `E2E_CHANNEL=msedge` seleciona Edge. `E2E_BROWSER=firefox`/`webkit` exige o navegador correspondente do Playwright. Playwright e axe-core são ferramentas de desenvolvimento. As fixtures possuem usuários sintéticos e são removidas em `finally`, inclusive nas falhas. Capturas/resultado ficam em `coverage/e2e/<navegador>/`; a medição do build fica em `coverage/bundle-audit.json`, todos ignorados pelo Git.
+
+A PWA apresenta atualizações para confirmação; uma tentativa de save pendente ou incerta bloqueia a atualização e a navegação para Conta/outro grupo. Rascunhos locais ainda dependem da memória desta tela: confirme e salve antes de fechar ou recarregar.
 
 ## Ambiente público
 
