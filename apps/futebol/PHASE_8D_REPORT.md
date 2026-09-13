@@ -1,7 +1,7 @@
 # Fase 8D — Integração de main e validação do site combinado
 
 Data: 2026-09-13. Branch: `codex/futebol-mvp`.
-**READY FOR FINAL RELEASE PREPARATION**, condicionado à conclusão do CI do checkpoint integrado. Esta classificação aprova a preparação da etapa final; não autoriza merge em main ou publicação.
+**READY FOR FINAL RELEASE PREPARATION**. Integração e CI do merge aprovados. Esta classificação aprova a preparação da etapa final; não autoriza merge em main ou publicação.
 
 ## Preflight e origem da integração
 
@@ -118,9 +118,28 @@ A raiz do artefato integrado mantém esse conteúdo. Diferença esperada: o arte
 
 ## CI e identificação dos checkpoints
 
-O CI integrado será observado após o push autorizado somente para origin/codex/futebol-mvp, sem commit vazio ou mudança de workflow. Resultado e run ID efetivamente observados serão acrescentados após sua conclusão, sem alegar PASS antecipado.
+Merge concluído e enviado normalmente a origin/codex/futebol-mvp:
+`9387c32b61f1d83ca978e165f19bec5840c10ba9`.
+Pais: HEAD Futebol inicial `06405f25b4c891fd7651c0e3ccd296d6e03ba53a` e main incorporada `6286335e9cb96eb140c2683ab609da0760b440e7`.
+HEAD remoto confirmado igual após o push, working tree limpa; main remota permaneceu no SHA de preflight.
 
-O SHA do merge será registrado após concluir o commit. O SHA do checkpoint final que contém este relatório pode ser obtido com `git log -1 --format=%H -- apps/futebol/PHASE_8D_REPORT.md`; o identificador literal e igualdade HEAD/origin serão confirmados na resposta final, depois das operações. Nenhum commit é reescrito para incluir o próprio hash.
+CI do merge: [run 34766637288](https://github.com/jaissoncb/sabara.org/actions/runs/34766637288), headBranch codex/futebol-mvp, SHA 9387c32 completo acima, status completed, conclusion success. Confirmado pela API autenticada após a conclusão:
+
+| Etapa CI | Conclusão |
+| --- | --- |
+| Lint | success |
+| Typecheck | success |
+| Test | success |
+| Test bundle security and Pages assembly | success |
+| Build Futebol, incluindo verify-build/scanner/PWA | success |
+| Assemble root and Futebol site | success |
+| Upload validated site preview | success |
+| Job build | success |
+| Job deploy | skipped, sem steps executados |
+
+Artifact pages-preview presente, não expirado, 1.074.756 bytes. Nenhum download/publicação necessário. A condição existente exige push em refs/heads/main e ENABLE_PAGES_DEPLOY=true; esta branch não satisfaz a condição e a variable continua inexistente.
+
+Este registro pós-CI é um checkpoint adicional SOMENTE de documentação, preservando o merge publicado sem amend/rebase/squash. Seu SHA final é identificado por `git log -1 --format=%H -- apps/futebol/PHASE_8D_REPORT.md`; o identificador literal, igualdade HEAD/origin, working tree e CI disparado pelo push documental serão confirmados na resposta final após as operações. Essa convenção evita tentar gravar o hash do próprio commit dentro dele.
 
 ## Limites e próxima autorização
 
