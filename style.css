@@ -6,6 +6,7 @@ html,
 body {
   margin: 0;
   min-height: 100%;
+  color-scheme: light dark;
 }
 
 body {
@@ -76,6 +77,23 @@ p {
   font-weight: 400;
   letter-spacing: 0.01em;
   color: #1a2230;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background:
+      radial-gradient(circle at 50% 44%, rgba(25, 92, 255, 0.14), transparent 28rem),
+      #0e131b;
+    color: #f7f9fc;
+  }
+
+  h1 {
+    color: #b7c0cd;
+  }
+
+  p {
+    color: #edf1f7;
+  }
 }
 
 @media (max-width: 520px) {

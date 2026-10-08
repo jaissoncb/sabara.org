@@ -14,21 +14,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sabará</title>
   <meta name="description" content="Sabará. You found it.">
-  <meta name="theme-color" content="#f8f9fb">
+  <meta name="theme-color" content="#f8f9fb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e131b" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
 
-  <link rel="icon" href="/favicon.ico?v=4" sizes="any">
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=4">
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=4">
+  <link rel="icon" href="/favicon.ico?v=5" sizes="any">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png?v=5" media="(prefers-color-scheme: light)">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=5" media="(prefers-color-scheme: light)">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16-dark.png?v=5" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32-dark.png?v=5" media="(prefers-color-scheme: dark)">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=5">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main class="page">
     <section class="hero" aria-label="Sabará">
-      <img
-        class="logo"
-        src="assets/sabara-logo.png"
-        alt="Sabará"
-      >
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/sabara-logo-dark.png">
+        <img
+          class="logo"
+          src="assets/sabara-logo.png"
+          alt="Sabará"
+        >
+      </picture>
 
       <div class="copy">
         <h1>SABARÁ</h1>
